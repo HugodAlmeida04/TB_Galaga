@@ -6,6 +6,20 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; }
         canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold; text-align: center;
+            display: none; /* Escondido por defeito, ativado com Tab */
+            pointer-events: none; /* Deixa os cliques passarem para o jogo */
+            z-index: 10;
+        }
+        .hud-container {
+            display: flex; justify-content: space-around; padding-top: 20px;
+        }
+        .titulo { color: red; font-size: 28px; }
+        .valor { color: white; font-size: 28px; }
     </style>
     <script type="importmap">
       {
@@ -17,11 +31,27 @@
     </script>
 </head>
 <body>
+    <div id="hud">
+        <div class="hud-container">
+            <div>
+                <div class="titulo">1UP</div>
+                <div id="pontuacao" class="valor">0</div>
+            </div>
+            <div>
+                <div class="titulo">HIGH SCORE</div>
+                <div id="highscore" class="valor">20000</div>
+            </div>
+            <div>
+                <div class="titulo">VIDAS</div>
+                <div id="vidas" class="valor">3</div>
+            </div>
+        </div>
+    </div>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- VARIÁVEIS GLOBAIS ---
+        
         let scene, renderer, controls;
         let cameraPerspetiva, cameraOrtografica, cameraAtiva;
         
@@ -29,6 +59,11 @@
         let lasers = []; // Array para gerir os tiros em cena
         let teclas = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
         let ultimoDisparo = 0; // Controlo de cadência de tiro
+        let explosoes = []; // Guarda as animações ativas
+        let pontos = 0;
+        let pontuacaoMaxima = 20000;
+        let vidas = 3;
+        let hudVisivel = false;
 
         let grupoFrota;
         let arrayInimigos = [];
@@ -36,7 +71,7 @@
         init();
         animate();
 
-        // Linha 33: Inicialização
+        // Inicialização
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x020205); // Fundo quase preto (espaço)
@@ -60,7 +95,7 @@
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
         }
-        //Configuração da Câmara
+        // Configuração da Câmara
         function configurarCamaras() {
             const aspeto = window.innerWidth / window.innerHeight;
             
@@ -72,12 +107,11 @@
                 (frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, 
                 frustumSize / 2, frustumSize / -2, 0.1, 1000
             );
-            // Subimos a câmara 2D para o Y=5 para que o centro do ecrã fique entre ti e a frota
             cameraOrtografica.position.set(0, 5, 25);
 
             cameraAtiva = cameraOrtografica; // Arranca em 2D
         }
-        //Luzes base
+        // Luzes base
         function configurarLuzes() {
             const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.1); // Muito fraca
             scene.add(luzAmbiente);
@@ -130,14 +164,13 @@
                 naveJogador.add(cubo);
             });
 
-            // Ajuste da escala e posição para o novo tamanho correto
             naveJogador.scale.set(0.4, 0.4, 0.4);
             naveJogador.position.set(0, -35, 0); 
             scene.add(naveJogador);
         }        
           
         // Fábrica Genérica: Constrói 1 inimigo a partir de uma matriz
-        function fabricarInimigo(matrizDesign) {
+        function fabricarInimigo(matrizDesign, valorPontos) {
             const inimigo = new THREE.Group();
             const geometria = new THREE.BoxGeometry(1, 1, 1);
             
@@ -147,8 +180,11 @@
                 inimigo.add(cubo);
             });
             
-            // O inimigo é um pouco mais pequeno que a nossa nave
-            inimigo.scale.set(0.3, 0.3, 0.3); 
+            inimigo.scale.set(0.35, 0.35, 0.35); 
+            
+            // TRUQUE DE ENGENHARIA: Guardamos os pontos na memória interna deste objeto
+            inimigo.userData.pontos = valorPontos; 
+            
             return inimigo;
         }
 
@@ -225,6 +261,37 @@
                     
                     grupoFrota.add(inimigo);
                     arrayInimigos.push(inimigo);
+
+                for (let linha = 0; linha < linhas; linha++) 
+                {
+                    for (let col = 0; col < colunas; col++) 
+                    {
+                    
+                    let designEscolhido;
+                    let pontosDestaNave; // Nova variável para a pontuação
+
+                    // O algoritmo decide a matriz e a pontuação com base na linha
+                    if (linha === 0) {
+                        designEscolhido = designBoss; 
+                        pontosDestaNave = 160; // Boss Galaga vale 400 pontos
+                    } else if (linha === 1 || linha === 2) {
+                        designEscolhido = designGoei;
+                        pontosDestaNave = 100; // Borboletas valem 160 pontos
+                    } else {
+                        designEscolhido = designZako;
+                        pontosDestaNave = 50;  // Moscas valem 80 pontos
+                    }
+
+                    // Passamos o design e os pontos para a fábrica
+                    const inimigo = fabricarInimigo(designEscolhido, pontosDestaNave);
+                    
+                    inimigo.position.x = (col * espacamentoX) - ((colunas - 1) * espacamentoX) / 2;
+                    inimigo.position.y = - (linha * espacamentoY);
+                    
+                    grupoFrota.add(inimigo);
+                    arrayInimigos.push(inimigo);
+                    }
+                }
                 }
             }
 
@@ -265,6 +332,49 @@
             lasers.push(laser);
         }
 
+        // --- SISTEMA DE UI (HUD) ---
+        function atualizarHUD() {
+            // Atualiza o recorde se passares a pontuação
+            if (pontos > pontuacaoMaxima) pontuacaoMaxima = pontos;
+            
+            // Injeta os valores no HTML
+            document.getElementById('pontuacao').innerText = pontos;
+            document.getElementById('highscore').innerText = pontuacaoMaxima;
+            document.getElementById('vidas').innerText = vidas;
+        }
+
+        // --- SISTEMA DE PARTÍCULAS (Animação de Morte) ---
+        function criarExplosao(posicaoMundo) {
+            const grupoExplosao = new THREE.Group();
+            grupoExplosao.position.copy(posicaoMundo); // Nasce exatamente onde o inimigo estava
+
+            // As cores clássicas da explosão da arcada
+            const cores = [0xffff00, 0x00ffff, 0xffffff]; // Amarelo, Ciano, Branco
+            const geometriaPixel = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+
+            // Criar 8 fragmentos que saltam do inimigo
+            for (let i = 0; i < 8; i++) {
+                const material = new THREE.MeshBasicMaterial({ 
+                    color: cores[Math.floor(Math.random() * cores.length)] 
+                });
+                const fragmento = new THREE.Mesh(geometriaPixel, material);
+                
+                // Matemática Trigonométrica: Atira cada fragmento num ângulo diferente formando um círculo
+                const angulo = (i / 8) * Math.PI * 2;
+                const velocidadeEstilhaco = 0.6;
+                fragmento.userData.velX = Math.cos(angulo) * velocidadeEstilhaco;
+                fragmento.userData.velY = Math.sin(angulo) * velocidadeEstilhaco;
+                
+                grupoExplosao.add(fragmento);
+            }
+
+            // A explosão dura 20 frames antes de desaparecer
+            grupoExplosao.userData.tempoVida = 20; 
+            
+            scene.add(grupoExplosao);
+            explosoes.push(grupoExplosao);
+        }
+
         function onKeyDown(event) {
             if (event.key === 'Control') {
                 cameraAtiva = (cameraAtiva === cameraPerspetiva) ? cameraOrtografica : cameraPerspetiva;
@@ -274,6 +384,11 @@
             if (event.code === 'ArrowUp') teclas.ArrowUp = true;
             if (event.code === 'ArrowDown') teclas.ArrowDown = true;
             if (event.code === 'Space') disparar();
+            if (event.code === 'Tab') {
+                event.preventDefault(); // Impede que o browser mude de janela/seleção
+                hudVisivel = !hudVisivel; // Alterna entre true e false
+                document.getElementById('hud').style.display = hudVisivel ? 'block' : 'none';
+            }
         }
 
         function onKeyUp(event) {
@@ -301,7 +416,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // Linha 151: O motor do jogo
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
@@ -353,21 +467,73 @@
                 naveJogador.position.y -= Math.cos(naveJogador.rotation.z) * (velocidadeMovimento / 2);
             }
 
-            // Movimento dos Lasers (Com base no vetor gravado no momento do disparo)
+            // Variável temporária para extrair as coordenadas globais
+            const vetorMundoInimigo = new THREE.Vector3();
+
+            // --- LÓGICA DE TIRO E COLISÃO ---
             for (let i = lasers.length - 1; i >= 0; i--) {
-                lasers[i].position.x += lasers[i].userData.velX;
-                lasers[i].position.y += lasers[i].userData.velY;
+                let laser = lasers[i];
+                laser.position.x += laser.userData.velX;
+                laser.position.y += laser.userData.velY;
                 
-                // Destruir o laser se ele se afastar mais de 60 unidades do centro
-                if (Math.abs(lasers[i].position.x) > 60 || Math.abs(lasers[i].position.y) > 60) {
-                    scene.remove(lasers[i]);
+                let laserDestruido = false;
+
+                // Verificar colisão contra toda a frota
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inimigo = arrayInimigos[j];
+                    
+                    // Extrair a verdadeira posição do inimigo no espaço 3D global
+                    inimigo.getWorldPosition(vetorMundoInimigo);
+
+                    // Se a distância entre o laser e o centro do inimigo for menor que 2.5 unidades
+                    if (laser.position.distanceTo(vetorMundoInimigo) < 2.5) {
+                        
+                        // 1. Nasce a Explosão
+                        criarExplosao(vetorMundoInimigo);
+
+                        // 2. Apagar Inimigo
+                        grupoFrota.remove(inimigo); // Apaga do ecrã
+                        arrayInimigos.splice(j, 1); // Apaga da memória
+
+                        pontos += inimigo.userData.pontos;
+                        atualizarHUD();
+
+                        // 3. Apagar Laser
+                        scene.remove(laser);
+                        lasers.splice(i, 1);
+                        laserDestruido = true;
+                        
+                        break; // Bateu, paramos de verificar outros inimigos para este laser
+                    }
+                }
+
+                if (laserDestruido) continue; // Pula para o próximo laser se este explodiu
+
+                // Destruir laser se for para fora do mapa (Otimização de memória)
+                if (Math.abs(laser.position.x) > 60 || Math.abs(laser.position.y) > 60) {
+                    scene.remove(laser);
                     lasers.splice(i, 1);
                 }
             }
-            if (grupoFrota) {
-                const tempo = Date.now() * 0.001; 
-                grupoFrota.position.x = Math.sin(tempo) * 4; 
-                grupoFrota.position.y = 20 + Math.cos(tempo * 2) * 0.5; 
+
+            // --- ANIMAÇÃO DAS PARTÍCULAS DE EXPLOSÃO ---
+            for (let i = explosoes.length - 1; i >= 0; i--) {
+                let exp = explosoes[i];
+                
+                // Mover cada píxel da explosão para fora e encolhê-lo
+                exp.children.forEach(fragmento => {
+                    fragmento.position.x += fragmento.userData.velX;
+                    fragmento.position.y += fragmento.userData.velY;
+                    fragmento.scale.multiplyScalar(0.85); // Efeito de desvanecimento
+                });
+
+                exp.userData.tempoVida--;
+
+                // Quando o tempo acabar, limpa a explosão da memória
+                if (exp.userData.tempoVida <= 0) {
+                    scene.remove(exp);
+                    explosoes.splice(i, 1);
+                }
             }
 
             renderer.render(scene, cameraAtiva);
