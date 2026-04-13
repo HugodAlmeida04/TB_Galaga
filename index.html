@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Galaga 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- VARIÁVEIS GLOBAIS ---
+        let scene, renderer, controls;
+        let cameraPerspetiva, cameraOrtografica, cameraAtiva;
+        
+        let naveJogador;
+        let lasers = []; // Array para gerir os tiros em cena
+        let teclas = { ArrowLeft: false, ArrowRight: false };
+        let ultimoDisparo = 0; // Controlo de cadência de tiro
+
+        let grupoFrota;
+        let arrayInimigos = [];
+
+        init();
+        animate();
+
+        // Linha 33: Inicialização
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205); // Fundo quase preto (espaço)
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            configurarCamaras();
+            configurarLuzes();
+            criarNave();
+            criarFrota();
+
+            controls = new OrbitControls(cameraPerspetiva, renderer.domElement);
+            controls.enableDamping = true;
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+        }
+
+        // Linha 52: Câmaras ajustadas para o ângulo do Galaga
+        function configurarCamaras() {
+            const aspeto = window.innerWidth / window.innerHeight;
+            
+            // Câmara perspetiva (inclinada, a olhar de cima/trás para a frente)
+            cameraPerspetiva = new THREE.PerspectiveCamera(45, aspeto, 0.1, 1000);
+            cameraPerspetiva.position.set(0, -15, 25);
+            cameraPerspetiva.lookAt(0, 5, 0);
+
+            // Câmara ortográfica (Vista clássica de topo 2D)
+            const frustumSize = 35;
+            cameraOrtografica = new THREE.OrthographicCamera(
+                (frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, 
+                frustumSize / 2, frustumSize / -2, 0.1, 1000
+            );
+            cameraOrtografica.position.set(0, 0, 25);
+
+            cameraAtiva = cameraOrtografica; // O jogo arranca no formato 2D clássico
+        }
+
+        // Linha 72: Luzes base
+        function configurarLuzes() {
+            const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.1); // Muito fraca
+            scene.add(luzAmbiente);
+
+            const luzDirecional = new THREE.DirectionalLight(0xaaaaaa, 1);
+            luzDirecional.position.set(0, 0, 10);
+            scene.add(luzDirecional);
+        }
+        
+    
+        function criarNave() {
+            naveJogador = new THREE.Group();
+            
+            const geometria = new THREE.BoxGeometry(1, 1, 1); 
+
+            // Cores
+            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 }); // Branco
+            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 }); // Vermelho
+            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 }); // Azul
+            const cVerde = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 }); // Verde
+            const cVerdeEscuro = new THREE.MeshStandardMaterial({ color: 0x008800, emissive: 0x002200 }); // Verde Escuro
+            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x004444 }); // Ciano
+            const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x444400 }); // Amarelo
+            const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x220044 }); // Roxo
+
+            const designNave = [
+                // Construção da nave
+                [0, 15, cB], 
+                [0, 14, cB], 
+                [0, 13, cB],
+                [-1, 12, cB], [ 0, 12, cB], [1, 12, cB],
+                [-1, 11, cB], [ 0, 11, cB], [1, 11, cB], 
+                [-1, 10, cB], [ 0, 10, cB], [1, 10, cB], [-4, 10, cV], [ 4, 10, cV], 
+                [-1,  9, cB], [ 0,  9, cB], [1,  9, cB], [-4,  9, cV], [ 4,  9, cV], 
+                [-4,  8, cB], [-2,  8, cB], [-1, 8, cB], [ 0,  8, cB], [ 1,  8, cB], [ 2,  8, cB], [ 4,  8, cB],
+                [-7,  7, cV], [-4,  7, cB], [-3, 7, cA], [-2,  7, cB], [-1,  7, cB], [ 0,  7, cV], [ 1,  7, cB], [ 2,  7, cB], [ 3,  7, cA], [ 4,  7, cB], [ 7,  7, cV],
+                [-7,  6, cV], [-4,  6, cA], [-3, 6, cB], [-2,  6, cB], [-1,  6, cV], [ 0,  6, cV], [ 1,  6, cV], [ 2,  6, cB], [ 3,  6, cB], [ 4,  6, cA], [ 7,  6, cV],
+                [-7,  5, cB], [-4,  5, cB], [-3, 5, cB], [-2,  5, cB], [-1,  5, cV], [ 0,  5, cB], [ 1,  5, cV], [ 2,  5, cB], [ 3,  5, cB], [ 4,  5, cB], [ 7,  5, cB],
+                [-7,  4, cB], [-5,  4, cB], [-4, 4, cB], [-3,  4, cB], [-2,  4, cB], [-1,  4, cB], [ 0,  4, cB], [ 1,  4, cB], [ 2,  4, cB], [ 3,  4, cB], [ 4,  4, cB], [ 5,  4, cB], [ 7,  4, cB],
+                [-7,  3, cB], [-6,  3, cB], [-5, 3, cB], [-4,  3, cB], [-3,  3, cB], [-2,  3, cV], [-1,  3, cB], [ 0,  3, cB], [ 1,  3, cB], [ 2,  3, cV], [ 3,  3, cB], [ 4,  3, cB], [ 5,  3, cB], [ 6,  3, cB], [ 7,  3, cB],
+                [-7,  2, cB], [-6,  2, cB], [-5, 2, cB], [-3,  2, cV], [-2,  2, cV], [-1,  2, cB], [ 0,  2, cB], [ 1,  2, cB], [ 2,  2, cV], [ 3,  2, cV], [ 5,  2, cB], [ 6,  2, cB], [ 7,  2, cB],
+                [-7,  1, cB], [-6,  1, cB], [-3, 1, cV], [-2,  1, cV], [ 0,  1, cB], [ 2,  1, cV], [ 3,  1, cV], [ 6,  1, cB], [ 7,  1, cB],
+                [-7,  0, cB], [ 0,  0, cB], [ 7, 0, cB],
+              ]
+
+
+            designNave.forEach(bloco => {
+                const cubo = new THREE.Mesh(geometria, bloco[2]);
+                cubo.position.set(bloco[0], bloco[1], 0);
+                naveJogador.add(cubo);
+            });
+
+            // Ajuste da escala e posição para o novo tamanho correto
+            naveJogador.scale.set(0.4, 0.4, 0.4);
+            naveJogador.position.set(0, -35, 0); 
+            scene.add(naveJogador);
+        }        
+          
+        // Fábrica Genérica: Constrói 1 inimigo a partir de uma matriz
+        function fabricarInimigo(matrizDesign) {
+            const inimigo = new THREE.Group();
+            const geometria = new THREE.BoxGeometry(1, 1, 1);
+            
+            matrizDesign.forEach(bloco => {
+                const cubo = new THREE.Mesh(geometria, bloco[2]);
+                cubo.position.set(bloco[0], bloco[1], 0);
+                inimigo.add(cubo);
+            });
+            
+            // O inimigo é um pouco mais pequeno que a nossa nave
+            inimigo.scale.set(0.3, 0.3, 0.3); 
+            return inimigo;
+        }
+
+        // Lógica de Geração da Frota (Requisito de Animação e Objetos)
+        function criarFrota() {
+            grupoFrota = new THREE.Group();
+
+            // Cores
+            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 }); // Branco
+            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 }); // Vermelho
+            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 }); // Azul
+            const cVerde = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 }); // Verde
+            const cVerdeEscuro = new THREE.MeshStandardMaterial({ color: 0x008800, emissive: 0x002200 }); // Verde Escuro
+            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x004444 }); // Ciano
+            const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x444400 }); // Amarelo
+            const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x220044 }); // Roxo
+
+            // Matriz do Zako
+            const designZako = [
+                [-5, 3, cA], [ 0, 3, cAmarelo], [ 5, 3, cA],
+                [-4, 2, cA], [-2, 2, cAmarelo], [-1, 2, cV], [ 0, 2, cAmarelo], [1, 2, cV], [ 2, 2, cAmarelo], [ 4, 2, cA],
+                [-3, 1, cA], [-2, 1, cV], [-1, 1, cV], [ 0, 1, cAmarelo], [1, 1, cV], [ 2, 1, cV], [ 3, 1, cA],
+                [-2, 0, cAmarelo], [-1, 0, cAmarelo], [ 0, 0, cAmarelo], [1, 0, cAmarelo], [ 2, 0, cAmarelo],
+                [-3, -1, cA], [-2, -1, cA], [-1, -1, cAmarelo], [ 0, -1, cAmarelo], [1, -1, cAmarelo], [ 2, -1, cA], [ 3, -1, cA],
+                [-4, -2, cA], [-3, -2, cA], [-2, -2, cA], [-1, -2, cV], [ 0, -2, cV], [1, -2, cV], [ 2, -2, cA], [ 3, -2, cA], [ 4, -2, cA],
+                [-5, -3, cA], [-4, -3, cA], [-3, -3, cA], [-1, -3, cV], [ 0, -3, cV], [1, -3, cV], [ 3, -3, cA], [ 4, -3, cA], [ 5, -3, cA],
+                [-6, -4, cA], [-5, -4, cA], [-4, -4, cA], [-3, -4, cA], [-1, -4, cAmarelo], [ 0, -4, cAmarelo], [1, -4, cAmarelo], [ 3, -4, cA], [ 4, -4, cA], [ 5, -4, cA], [ 6, -4, cA],
+                [-6, -5, cA], [-5, -5, cA], [-4, -5, cA], [-1, -5, cV], [ 0, -5, cV], [ 1, -5, cV], [ 4, -5, cA], [ 5, -5, cA], [ 6, -5, cA],
+                [-6, -6, cA], [-5, -6, cA], [-4, -6, cA], [ 0, -6, cV], [ 4, -6, cA], [ 5, -6, cA], [ 6, -6, cA],
+            ];
+
+            const designGoei = [
+                [-4, 16, cV], [-1, 16, cA], [ 1, 16, cA], [ 4, 16, cV],
+                [-6, 15, cV], [-5, 15, cV], [-4, 15, cV], [-1, 15, cA], [ 1, 15, cA], [ 4, 15, cV], [ 5, 15, cV], [ 6, 15, cV],
+                [-6, 14, cV], [-5, 14, cV], [-4, 14, cV], [-2, 14, cB], [-1, 14, cV], [ 0, 14, cB], [ 1, 14, cV], [ 2, 14, cB], [ 4, 14, cV], [ 5, 14, cV], [ 6, 14, cV],
+                [-6, 13, cV], [-5, 13, cV], [-4, 13, cV], [-2, 13, cB], [-1, 13, cB], [ 0, 13, cB], [ 1, 13, cB], [ 2, 13, cB], [ 4, 13, cV], [ 5, 13, cV], [ 6, 13, cV],
+                [-5, 12, cV], [-4, 12, cV], [-3, 12, cV], [-2, 12, cV], [-1, 12, cB], [ 0, 12, cB], [ 1, 12, cB], [ 2, 12, cV], [ 3, 12, cV], [ 4, 12, cV], [ 5, 12, cV], 
+                [-5, 11, cV], [-4, 11, cV], [-3, 11, cV], [-2, 11, cV], [-1, 11, cA], [ 0, 11, cA], [ 1, 11, cA], [ 2, 11, cV], [ 3, 11, cV], [ 4, 11, cV], [ 5, 11, cV], 
+                [-4, 10, cV], [-3, 10, cV], [-2, 10, cV], [-1, 10, cA], [ 0, 10, cA], [ 1, 10, cA], [ 2, 10, cV], [ 3, 10, cV], [ 4, 10, cV],  
+                [-5,  9, cV], [-4,  9, cV], [-3,  9, cV], [-2,  9, cV], [-1,  9, cA], [ 0,  9, cA], [ 1,  9, cA], [ 2,  9, cV], [ 3,  9, cV], [ 4,  9, cV], [ 5,  9, cV], 
+                [-6,  8, cV], [-5,  8, cV], [-4,  8, cV], [-3,  8, cV], [-2,  8, cV], [-1,  8, cB], [ 0,  8, cB], [ 1,  8, cB], [ 2,  8, cV], [ 3,  8, cV], [ 4,  8, cV], [ 5,  8, cV], [ 6,  8, cV],
+                [-5,  7, cV], [-4,  7, cV], [-3,  7, cV], [-2,  7, cV], [-1,  7, cA], [ 0,  7, cA], [ 1,  7, cA], [ 2,  7, cV], [ 3,  7, cV], [ 4,  7, cV], [ 5,  7, cV], 
+                [-3,  6, cV], [ 3,  6, cV],
+            ];
+
+            const designBoss = [
+
+            ];
+
+            // Ciclo duplo para criar uma grelha: 2 Linhas, 5 Colunas
+            const colunas = 10;
+            const linhas = 5;
+            const espacamentoX = 6;
+            const espacamentoY = 5;
+
+            for (let linha = 0; linha < linhas; linha++) {
+                for (let col = 0; col < colunas; col++) {
+                    
+                    let designEscolhido;
+
+                    // O algoritmo decide que matriz usar com base na linha (0 a 4)
+                    if (linha === 0) {
+                        designEscolhido = designBoss; // Linha 0 (Topo): Boss Galaga
+                    } else if (linha === 1 || linha === 2) {
+                        designEscolhido = designGoei; // Linhas 1 e 2: Goei (Borboletas)
+                    } else {
+                        designEscolhido = designZako; // Linhas 3 e 4: Zako (Moscas)
+                    }
+
+                    const inimigo = fabricarInimigo(designEscolhido);
+                    
+                    inimigo.position.x = (col * espacamentoX) - ((colunas - 1) * espacamentoX) / 2;
+                    inimigo.position.y = - (linha * espacamentoY);
+                    
+                    grupoFrota.add(inimigo);
+                    arrayInimigos.push(inimigo);
+                }
+            }
+
+            // Posiciona a frota no topo do ecrã
+            grupoFrota.position.set(0, 20, 0);
+            scene.add(grupoFrota);
+        }
+    
+
+        // Linha 105: Lógica de Disparo e Luz Dinâmica (Requisito 3)
+        function disparar() {
+            const agora = Date.now();
+            if (agora - ultimoDisparo < 250) return; // Impede spam (máx 1 tiro a cada 250ms)
+            ultimoDisparo = agora;
+
+            // Criar o laser (MeshBasicMaterial não recebe sombras, brilha no escuro)
+            const geometriaLaser = new THREE.CylinderGeometry(0.1, 0.1, 1.5);
+            const materialLaser = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const laser = new THREE.Mesh(geometriaLaser, materialLaser);
+
+            // Anexar uma luz ao laser para iluminar o cenário por onde passa
+            const luzLaser = new THREE.PointLight(0xff0000, 2, 10);
+            laser.add(luzLaser);
+
+            laser.position.copy(naveJogador.position);
+            laser.position.y += 2; // O laser sai da ponta da nave
+
+            scene.add(laser);
+            lasers.push(laser);
+        }
+
+        // Linha 127: Gestão fluída de teclas
+        function onKeyDown(event) {
+            if (event.key === 'Control') {
+                cameraAtiva = (cameraAtiva === cameraPerspetiva) ? cameraOrtografica : cameraPerspetiva;
+            }
+            if (event.code === 'ArrowLeft') teclas.ArrowLeft = true;
+            if (event.code === 'ArrowRight') teclas.ArrowRight = true;
+            if (event.code === 'Space') disparar();
+        }
+
+        function onKeyUp(event) {
+            // Quando a tecla é levantada, o movimento para
+            if (event.code === 'ArrowLeft') teclas.ArrowLeft = false;
+            if (event.code === 'ArrowRight') teclas.ArrowRight = false;
+        }
+
+        function onWindowResize() {
+            const aspeto = window.innerWidth / window.innerHeight;
+            cameraPerspetiva.aspect = aspeto;
+            cameraPerspetiva.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Linha 151: O motor do jogo
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Atualizar Movimento da Nave com limites de ecrã
+            if (teclas.ArrowLeft && naveJogador.position.x > -15) naveJogador.position.x -= 0.3;
+            if (teclas.ArrowRight && naveJogador.position.x < 15) naveJogador.position.x += 0.3;
+
+            // Atualizar Posição dos Lasers (Animação)
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                lasers[i].position.y += 0.6; // Velocidade do tiro
+
+                // Gestão de memória: remover lasers que já saíram do ecrã
+                if (lasers[i].position.y > 20) {
+                    scene.remove(lasers[i]);
+                    lasers.splice(i, 1);
+                }
+            }
+            if (grupoFrota) {
+                const tempo = Date.now() * 0.001; 
+                grupoFrota.position.x = Math.sin(tempo) * 4; 
+                grupoFrota.position.y = 20 + Math.cos(tempo * 2) * 0.5; 
+            }
+
+            renderer.render(scene, cameraAtiva);
+        }
+    </script>
+</body>
+</html>
