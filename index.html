@@ -57,28 +57,25 @@
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
         }
-
-        // Linha 52: Câmaras ajustadas para o ângulo do Galaga
+        //Configuração da Câmara
         function configurarCamaras() {
             const aspeto = window.innerWidth / window.innerHeight;
             
-            // Câmara perspetiva (inclinada, a olhar de cima/trás para a frente)
             cameraPerspetiva = new THREE.PerspectiveCamera(45, aspeto, 0.1, 1000);
-            cameraPerspetiva.position.set(0, -15, 25);
-            cameraPerspetiva.lookAt(0, 5, 0);
+            cameraPerspetiva.position.set(0, -32, 18);
 
-            // Câmara ortográfica (Vista clássica de topo 2D)
-            const frustumSize = 35;
+            // Aumentamos o frustum para 50 para caber o ecrã inteiro (Nave no fundo, Frota no topo)
+            const frustumSize = 50; 
             cameraOrtografica = new THREE.OrthographicCamera(
                 (frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, 
                 frustumSize / 2, frustumSize / -2, 0.1, 1000
             );
-            cameraOrtografica.position.set(0, 0, 25);
+            // Subimos a câmara 2D para o Y=5 para que o centro do ecrã fique entre ti e a frota
+            cameraOrtografica.position.set(0, 5, 25);
 
-            cameraAtiva = cameraOrtografica; // O jogo arranca no formato 2D clássico
+            cameraAtiva = cameraOrtografica; // Arranca em 2D
         }
-
-        // Linha 72: Luzes base
+        //Luzes base
         function configurarLuzes() {
             const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.1); // Muito fraca
             scene.add(luzAmbiente);
@@ -201,9 +198,9 @@
 
             // Ciclo duplo para criar uma grelha: 2 Linhas, 5 Colunas
             const colunas = 10;
-            const linhas = 5;
-            const espacamentoX = 6;
-            const espacamentoY = 5;
+            const linhas = 4;
+            const espacamentoX = 6.5;
+            const espacamentoY = 4.5;
 
             for (let linha = 0; linha < linhas; linha++) {
                 for (let col = 0; col < colunas; col++) {
@@ -275,8 +272,19 @@
 
         function onWindowResize() {
             const aspeto = window.innerWidth / window.innerHeight;
+            
+            // Atualizar a matemática da câmara 3D
             cameraPerspetiva.aspect = aspeto;
             cameraPerspetiva.updateProjectionMatrix();
+
+            // Atualizar a matemática da câmara 2D (Faltava isto!)
+            const frustumSize = 85;
+            cameraOrtografica.left = - (frustumSize * aspeto) / 2;
+            cameraOrtografica.right = (frustumSize * aspeto) / 2;
+            cameraOrtografica.top = frustumSize / 2;
+            cameraOrtografica.bottom = - frustumSize / 2;
+            cameraOrtografica.updateProjectionMatrix();
+
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
