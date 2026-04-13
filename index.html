@@ -2,10 +2,26 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Galaga 3D</title>
+    <title>Galaga 3D - Save State</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; }
         canvas { display: block; }
+        
+        /* Interface de Jogo */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold; text-align: center;
+            display: none; 
+            pointer-events: none; 
+            z-index: 10;
+        }
+        .hud-container {
+            display: flex; justify-content: space-around; padding-top: 20px;
+        }
+        .titulo { color: red; font-size: 28px; }
+        .valor { color: white; font-size: 28px; }
     </style>
     <script type="importmap">
       {
@@ -17,6 +33,23 @@
     </script>
 </head>
 <body>
+    <div id="hud">
+        <div class="hud-container">
+            <div>
+                <div class="titulo">1UP</div>
+                <div id="pontuacao" class="valor">0</div>
+            </div>
+            <div>
+                <div class="titulo">HIGH SCORE</div>
+                <div id="highscore" class="valor">20000</div>
+            </div>
+            <div>
+                <div class="titulo">VIDAS</div>
+                <div id="vidas" class="valor">3</div>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -24,26 +57,37 @@
         // --- VARIÁVEIS GLOBAIS ---
         let scene, renderer, controls;
         let cameraPerspetiva, cameraOrtografica, cameraAtiva;
-        
         let naveJogador;
-        let lasers = []; // Array para gerir os tiros em cena
-        let teclas = { ArrowLeft: false, ArrowRight: false };
-        let ultimoDisparo = 0; // Controlo de cadência de tiro
-
-        let grupoFrota;
+        
+        // Arrays de Jogo
+        let lasers = []; 
+        let grupoFrota; 
         let arrayInimigos = [];
+        let explosoes = [];
+
+        // Estado do Jogo
+        let teclas = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
+        let ultimoDisparo = 0; 
+        let ultimoAtaqueInimigo = 0;
+        
+        // Variáveis do HUD
+        let pontos = 0;
+        let pontuacaoMaxima = 20000;
+        let vidas = 3;
+        let hudVisivel = false;
+        
 
         init();
         animate();
 
-        // Linha 33: Inicialização
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020205); // Fundo quase preto (espaço)
+            scene.background = new THREE.Color(0x020205); 
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
+            
 
             configurarCamaras();
             configurarLuzes();
@@ -52,49 +96,55 @@
 
             controls = new OrbitControls(cameraPerspetiva, renderer.domElement);
             controls.enableDamping = true;
+            controls.enablePan = false;
+            controls.minDistance = 10;
+            controls.maxDistance = 60;
 
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
         }
 
-        // Linha 52: Câmaras ajustadas para o ângulo do Galaga
+        // --- SISTEMA DE UI (HUD) ---
+        function atualizarHUD() {
+            if (pontos > pontuacaoMaxima) pontuacaoMaxima = pontos;
+            document.getElementById('pontuacao').innerText = pontos;
+            document.getElementById('highscore').innerText = pontuacaoMaxima;
+            document.getElementById('vidas').innerText = vidas;
+        }
+
+       // --- CÂMARAS E LUZES ---
         function configurarCamaras() {
             const aspeto = window.innerWidth / window.innerHeight;
             
-            // Câmara perspetiva (inclinada, a olhar de cima/trás para a frente)
             cameraPerspetiva = new THREE.PerspectiveCamera(45, aspeto, 0.1, 1000);
-            cameraPerspetiva.position.set(0, -15, 25);
-            cameraPerspetiva.lookAt(0, 5, 0);
-
-            // Câmara ortográfica (Vista clássica de topo 2D)
-            const frustumSize = 35;
+            cameraPerspetiva.position.set(0, -32, 18); // Faltava esta linha!
+            
+            const frustumSize = 85; 
             cameraOrtografica = new THREE.OrthographicCamera(
                 (frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, 
                 frustumSize / 2, frustumSize / -2, 0.1, 1000
             );
-            cameraOrtografica.position.set(0, 0, 25);
+            cameraOrtografica.position.set(0, 5, 25); // Faltava esta linha!
 
-            cameraAtiva = cameraOrtografica; // O jogo arranca no formato 2D clássico
+            cameraAtiva = cameraOrtografica; 
         }
 
-        // Linha 72: Luzes base
         function configurarLuzes() {
-            const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.1); // Muito fraca
+            const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.2); 
             scene.add(luzAmbiente);
 
-            const luzDirecional = new THREE.DirectionalLight(0xaaaaaa, 1);
-            luzDirecional.position.set(0, 0, 10);
+            const luzDirecional = new THREE.DirectionalLight(0xffffff, 1.2);
+            luzDirecional.position.set(0, 20, 10);
             scene.add(luzDirecional);
         }
-        
-    
+
+        // --- FÁBRICAS DE MODELOS ---
         function criarNave() {
             naveJogador = new THREE.Group();
+            const geometria = new THREE.BoxGeometry(1, 1, 1);
             
-            const geometria = new THREE.BoxGeometry(1, 1, 1); 
 
-            // Cores
             const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 }); // Branco
             const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 }); // Vermelho
             const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 }); // Azul
@@ -105,25 +155,18 @@
             const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x220044 }); // Roxo
 
             const designNave = [
-                // Construção da nave
-                [0, 15, cB], 
-                [0, 14, cB], 
-                [0, 13, cB],
-                [-1, 12, cB], [ 0, 12, cB], [1, 12, cB],
-                [-1, 11, cB], [ 0, 11, cB], [1, 11, cB], 
-                [-1, 10, cB], [ 0, 10, cB], [1, 10, cB], [-4, 10, cV], [ 4, 10, cV], 
-                [-1,  9, cB], [ 0,  9, cB], [1,  9, cB], [-4,  9, cV], [ 4,  9, cV], 
-                [-4,  8, cB], [-2,  8, cB], [-1, 8, cB], [ 0,  8, cB], [ 1,  8, cB], [ 2,  8, cB], [ 4,  8, cB],
-                [-7,  7, cV], [-4,  7, cB], [-3, 7, cA], [-2,  7, cB], [-1,  7, cB], [ 0,  7, cV], [ 1,  7, cB], [ 2,  7, cB], [ 3,  7, cA], [ 4,  7, cB], [ 7,  7, cV],
-                [-7,  6, cV], [-4,  6, cA], [-3, 6, cB], [-2,  6, cB], [-1,  6, cV], [ 0,  6, cV], [ 1,  6, cV], [ 2,  6, cB], [ 3,  6, cB], [ 4,  6, cA], [ 7,  6, cV],
-                [-7,  5, cB], [-4,  5, cB], [-3, 5, cB], [-2,  5, cB], [-1,  5, cV], [ 0,  5, cB], [ 1,  5, cV], [ 2,  5, cB], [ 3,  5, cB], [ 4,  5, cB], [ 7,  5, cB],
-                [-7,  4, cB], [-5,  4, cB], [-4, 4, cB], [-3,  4, cB], [-2,  4, cB], [-1,  4, cB], [ 0,  4, cB], [ 1,  4, cB], [ 2,  4, cB], [ 3,  4, cB], [ 4,  4, cB], [ 5,  4, cB], [ 7,  4, cB],
-                [-7,  3, cB], [-6,  3, cB], [-5, 3, cB], [-4,  3, cB], [-3,  3, cB], [-2,  3, cV], [-1,  3, cB], [ 0,  3, cB], [ 1,  3, cB], [ 2,  3, cV], [ 3,  3, cB], [ 4,  3, cB], [ 5,  3, cB], [ 6,  3, cB], [ 7,  3, cB],
-                [-7,  2, cB], [-6,  2, cB], [-5, 2, cB], [-3,  2, cV], [-2,  2, cV], [-1,  2, cB], [ 0,  2, cB], [ 1,  2, cB], [ 2,  2, cV], [ 3,  2, cV], [ 5,  2, cB], [ 6,  2, cB], [ 7,  2, cB],
-                [-7,  1, cB], [-6,  1, cB], [-3, 1, cV], [-2,  1, cV], [ 0,  1, cB], [ 2,  1, cV], [ 3,  1, cV], [ 6,  1, cB], [ 7,  1, cB],
-                [-7,  0, cB], [ 0,  0, cB], [ 7, 0, cB],
-              ]
-
+                [0, 10, cA], [0, 9, cA], [0, 8, cA], [0, 7, cA], [0, 6, cB],
+                [-1, 8, cB], [1, 8, cB], [-1, 7, cB], [1, 7, cB], [-1, 6, cB], [1, 6, cB], [-2, 6, cB], [2, 6, cB],
+                [-3, 6, cCiano], [3, 6, cCiano], [-4, 6, cCiano], [4, 6, cCiano],
+                [-3, 5, cB], [3, 5, cB], [-4, 5, cB], [4, 5, cB],
+                [-5, 5, cCiano], [5, 5, cCiano], [-6, 5, cCiano], [6, 5, cCiano],
+                [-7, 4, cCiano], [7, 4, cCiano], [-8, 4, cCiano], [8, 4, cCiano],
+                [-7, 3, cB], [7, 3, cB], [-8, 3, cB], [8, 3, cB],
+                [-9, 3, cV], [9, 3, cV], [-10, 2, cV], [10, 2, cV],
+                [-2, 3, cV], [2, 3, cV], [-2, 2, cV], [2, 2, cV],
+                [-1, 1, cA], [1, 1, cA], [-1, 0, cV], [1, 0, cV],
+                [-2, 0, cA], [2, 0, cA], [-3, -1, cV], [3, -1, cV]
+            ];
 
             designNave.forEach(bloco => {
                 const cubo = new THREE.Mesh(geometria, bloco[2]);
@@ -131,33 +174,27 @@
                 naveJogador.add(cubo);
             });
 
-            // Ajuste da escala e posição para o novo tamanho correto
             naveJogador.scale.set(0.4, 0.4, 0.4);
-            naveJogador.position.set(0, -35, 0); 
+            naveJogador.position.set(0, -15, 0); 
             scene.add(naveJogador);
-        }        
-          
-        // Fábrica Genérica: Constrói 1 inimigo a partir de uma matriz
-        function fabricarInimigo(matrizDesign) {
+        }
+
+        function fabricarInimigo(matrizDesign, valorPontos) {
             const inimigo = new THREE.Group();
             const geometria = new THREE.BoxGeometry(1, 1, 1);
-            
             matrizDesign.forEach(bloco => {
                 const cubo = new THREE.Mesh(geometria, bloco[2]);
                 cubo.position.set(bloco[0], bloco[1], 0);
                 inimigo.add(cubo);
             });
-            
-            // O inimigo é um pouco mais pequeno que a nossa nave
-            inimigo.scale.set(0.3, 0.3, 0.3); 
+            inimigo.scale.set(0.35, 0.35, 0.35); 
+            inimigo.userData.pontos = valorPontos; 
+            inimigo.userData.estado = 'FROTA';
             return inimigo;
         }
 
-        // Lógica de Geração da Frota (Requisito de Animação e Objetos)
         function criarFrota() {
             grupoFrota = new THREE.Group();
-
-            // Cores
             const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 }); // Branco
             const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 }); // Vermelho
             const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 }); // Azul
@@ -167,60 +204,58 @@
             const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x444400 }); // Amarelo
             const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x220044 }); // Roxo
 
-            // Matriz do Zako
             const designZako = [
-                [-5, 3, cA], [ 0, 3, cAmarelo], [ 5, 3, cA],
-                [-4, 2, cA], [-2, 2, cAmarelo], [-1, 2, cV], [ 0, 2, cAmarelo], [1, 2, cV], [ 2, 2, cAmarelo], [ 4, 2, cA],
-                [-3, 1, cA], [-2, 1, cV], [-1, 1, cV], [ 0, 1, cAmarelo], [1, 1, cV], [ 2, 1, cV], [ 3, 1, cA],
-                [-2, 0, cAmarelo], [-1, 0, cAmarelo], [ 0, 0, cAmarelo], [1, 0, cAmarelo], [ 2, 0, cAmarelo],
-                [-3, -1, cA], [-2, -1, cA], [-1, -1, cAmarelo], [ 0, -1, cAmarelo], [1, -1, cAmarelo], [ 2, -1, cA], [ 3, -1, cA],
-                [-4, -2, cA], [-3, -2, cA], [-2, -2, cA], [-1, -2, cV], [ 0, -2, cV], [1, -2, cV], [ 2, -2, cA], [ 3, -2, cA], [ 4, -2, cA],
-                [-5, -3, cA], [-4, -3, cA], [-3, -3, cA], [-1, -3, cV], [ 0, -3, cV], [1, -3, cV], [ 3, -3, cA], [ 4, -3, cA], [ 5, -3, cA],
-                [-6, -4, cA], [-5, -4, cA], [-4, -4, cA], [-3, -4, cA], [-1, -4, cAmarelo], [ 0, -4, cAmarelo], [1, -4, cAmarelo], [ 3, -4, cA], [ 4, -4, cA], [ 5, -4, cA], [ 6, -4, cA],
-                [-6, -5, cA], [-5, -5, cA], [-4, -5, cA], [-1, -5, cV], [ 0, -5, cV], [ 1, -5, cV], [ 4, -5, cA], [ 5, -5, cA], [ 6, -5, cA],
-                [-6, -6, cA], [-5, -6, cA], [-4, -6, cA], [ 0, -6, cV], [ 4, -6, cA], [ 5, -6, cA], [ 6, -6, cA],
+                [-2, 5, cV], [2, 5, cV], [-3, 4, cV], [3, 4, cV], [-2, 4, cCiano], [2, 4, cCiano],
+                // Corpo Superior (Ciano e Branco)
+                [-1, 3, cCiano], [1, 3, cCiano], [-1, 2, cB], [1, 2, cB], [0, 2, cAmarelo], 
+                [-2, 1, cCiano], [2, 1, cCiano], [-2, 2, cB], [2, 2, cB],
+                // Núcleo Central (Vermelho e Amarelo)
+                [0, 1, cAmarelo], [0, 0, cV], [-1, 0, cV], [1, 0, cV],
+                // Corpo Inferior (Ciano)
+                [-3, -1, cCiano], [3, -1, cCiano], [-2, -2, cCiano], [2, -2, cCiano], [-1, -3, cCiano], [1, -3, cCiano],
+                // Pontas Laterais (Branco)
+                [-4, -1, cB], [4, -1, cB], [-4, -2, cB], [4, -2, cB]
             ];
 
             const designGoei = [
-                [-4, 16, cV], [-1, 16, cA], [ 1, 16, cA], [ 4, 16, cV],
-                [-6, 15, cV], [-5, 15, cV], [-4, 15, cV], [-1, 15, cA], [ 1, 15, cA], [ 4, 15, cV], [ 5, 15, cV], [ 6, 15, cV],
-                [-6, 14, cV], [-5, 14, cV], [-4, 14, cV], [-2, 14, cB], [-1, 14, cV], [ 0, 14, cB], [ 1, 14, cV], [ 2, 14, cB], [ 4, 14, cV], [ 5, 14, cV], [ 6, 14, cV],
-                [-6, 13, cV], [-5, 13, cV], [-4, 13, cV], [-2, 13, cB], [-1, 13, cB], [ 0, 13, cB], [ 1, 13, cB], [ 2, 13, cB], [ 4, 13, cV], [ 5, 13, cV], [ 6, 13, cV],
-                [-5, 12, cV], [-4, 12, cV], [-3, 12, cV], [-2, 12, cV], [-1, 12, cB], [ 0, 12, cB], [ 1, 12, cB], [ 2, 12, cV], [ 3, 12, cV], [ 4, 12, cV], [ 5, 12, cV], 
-                [-5, 11, cV], [-4, 11, cV], [-3, 11, cV], [-2, 11, cV], [-1, 11, cA], [ 0, 11, cA], [ 1, 11, cA], [ 2, 11, cV], [ 3, 11, cV], [ 4, 11, cV], [ 5, 11, cV], 
-                [-4, 10, cV], [-3, 10, cV], [-2, 10, cV], [-1, 10, cA], [ 0, 10, cA], [ 1, 10, cA], [ 2, 10, cV], [ 3, 10, cV], [ 4, 10, cV],  
-                [-5,  9, cV], [-4,  9, cV], [-3,  9, cV], [-2,  9, cV], [-1,  9, cA], [ 0,  9, cA], [ 1,  9, cA], [ 2,  9, cV], [ 3,  9, cV], [ 4,  9, cV], [ 5,  9, cV], 
-                [-6,  8, cV], [-5,  8, cV], [-4,  8, cV], [-3,  8, cV], [-2,  8, cV], [-1,  8, cB], [ 0,  8, cB], [ 1,  8, cB], [ 2,  8, cV], [ 3,  8, cV], [ 4,  8, cV], [ 5,  8, cV], [ 6,  8, cV],
-                [-5,  7, cV], [-4,  7, cV], [-3,  7, cV], [-2,  7, cV], [-1,  7, cA], [ 0,  7, cA], [ 1,  7, cA], [ 2,  7, cV], [ 3,  7, cV], [ 4,  7, cV], [ 5,  7, cV], 
-                [-3,  6, cV], [ 3,  6, cV],
+              [0, 3, cAmarelo], [0, 2, cAmarelo], [0, 1, cV], [0, 0, cV], [-1, 2, cAmarelo], [1, 2, cAmarelo],
+                // Asas Superiores (Verde)
+                [-1, 3, cVerde], [1, 3, cVerde], [-2, 3, cVerde], [2, 3, cVerde], [-3, 2, cVerde], [2, 2, cVerde],
+                // Asas Inferiores (Branco)
+                [-2, 1, cB], [2, 1, cB], [-3, 0, cB], [3, 0, cB], [-2, -1, cB], [2, -1, cB], [-1, -2, cB], [1, -2, cB]
             ];
 
             const designBoss = [
-
+                [0, 2, cA], [0, 1, cA], [-1, 1, cCiano], [1, 1, cCiano],
+                // Corpo e Asas Curtas (Azul, Vermelho, Branco)
+                [-1, 0, cA], [1, 0, cA], [0, 0, cV],
+                [-2, -1, cA], [2, -1, cA], [-3, -1, cB], [3, -1, cB],
+                [-2, -2, cV], [2, -2, cV], [-1, -3, cV], [1, -3, cV],
+                [-1, -2, cB], [1, -2, cB]
             ];
 
-            // Ciclo duplo para criar uma grelha: 2 Linhas, 5 Colunas
             const colunas = 10;
-            const linhas = 5;
-            const espacamentoX = 6;
-            const espacamentoY = 5;
+            const linhas = 5; 
+            const espacamentoX = 6.5; 
+            const espacamentoY = 4.5; 
 
             for (let linha = 0; linha < linhas; linha++) {
                 for (let col = 0; col < colunas; col++) {
-                    
                     let designEscolhido;
+                    let pontosDestaNave;
 
-                    // O algoritmo decide que matriz usar com base na linha (0 a 4)
                     if (linha === 0) {
-                        designEscolhido = designBoss; // Linha 0 (Topo): Boss Galaga
+                        designEscolhido = designBoss; 
+                        pontosDestaNave = 400;
                     } else if (linha === 1 || linha === 2) {
-                        designEscolhido = designGoei; // Linhas 1 e 2: Goei (Borboletas)
+                        designEscolhido = designGoei;
+                        pontosDestaNave = 160;
                     } else {
-                        designEscolhido = designZako; // Linhas 3 e 4: Zako (Moscas)
+                        designEscolhido = designZako;
+                        pontosDestaNave = 80;
                     }
 
-                    const inimigo = fabricarInimigo(designEscolhido);
-                    
+                    const inimigo = fabricarInimigo(designEscolhido, pontosDestaNave);
                     inimigo.position.x = (col * espacamentoX) - ((colunas - 1) * espacamentoX) / 2;
                     inimigo.position.y = - (linha * espacamentoY);
                     
@@ -229,80 +264,242 @@
                 }
             }
 
-            // Posiciona a frota no topo do ecrã
-            grupoFrota.position.set(0, 20, 0);
+            grupoFrota.position.set(0, 26, 0); 
             scene.add(grupoFrota);
         }
-    
 
-        // Linha 105: Lógica de Disparo e Luz Dinâmica (Requisito 3)
+        // --- SISTEMA DE FÍSICA E COMBATE ---
         function disparar() {
             const agora = Date.now();
-            if (agora - ultimoDisparo < 250) return; // Impede spam (máx 1 tiro a cada 250ms)
+            if (agora - ultimoDisparo < 250) return; 
             ultimoDisparo = agora;
 
-            // Criar o laser (MeshBasicMaterial não recebe sombras, brilha no escuro)
             const geometriaLaser = new THREE.CylinderGeometry(0.1, 0.1, 1.5);
             const materialLaser = new THREE.MeshBasicMaterial({ color: 0xff0000 });
             const laser = new THREE.Mesh(geometriaLaser, materialLaser);
 
-            // Anexar uma luz ao laser para iluminar o cenário por onde passa
-            const luzLaser = new THREE.PointLight(0xff0000, 2, 10);
-            laser.add(luzLaser);
-
+            // Laser nasce na posição da nave com a mesma rotação
             laser.position.copy(naveJogador.position);
-            laser.position.y += 2; // O laser sai da ponta da nave
+            laser.rotation.z = naveJogador.rotation.z;
+
+            // Vetores de velocidade
+            const velocidadeTiro = 0.8;
+            laser.userData.velX = -Math.sin(naveJogador.rotation.z) * velocidadeTiro;
+            laser.userData.velY = Math.cos(naveJogador.rotation.z) * velocidadeTiro;
+
+            // Afastar do bico da nave
+            laser.position.x += laser.userData.velX * 3;
+            laser.position.y += laser.userData.velY * 3;
 
             scene.add(laser);
             lasers.push(laser);
         }
 
-        // Linha 127: Gestão fluída de teclas
+        function criarExplosao(posicaoMundo) {
+            const grupoExplosao = new THREE.Group();
+            grupoExplosao.position.copy(posicaoMundo); 
+
+            const cores = [0xffff00, 0x00ffff, 0xffffff]; 
+            const geometriaPixel = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+
+            for (let i = 0; i < 8; i++) {
+                const material = new THREE.MeshBasicMaterial({ 
+                    color: cores[Math.floor(Math.random() * cores.length)] 
+                });
+                const fragmento = new THREE.Mesh(geometriaPixel, material);
+                
+                const angulo = (i / 8) * Math.PI * 2;
+                const velocidadeEstilhaco = 0.6;
+                fragmento.userData.velX = Math.cos(angulo) * velocidadeEstilhaco;
+                fragmento.userData.velY = Math.sin(angulo) * velocidadeEstilhaco;
+                
+                grupoExplosao.add(fragmento);
+            }
+
+            grupoExplosao.userData.tempoVida = 20; 
+            scene.add(grupoExplosao);
+            explosoes.push(grupoExplosao);
+        }
+
+        // --- INTELIGÊNCIA ARTIFICIAL ---
+        function gerirAtaques() {
+            const agora = Date.now();
+            
+            if (agora - ultimoAtaqueInimigo > 2000) {
+                ultimoAtaqueInimigo = agora;
+
+                const navesNaFrota = arrayInimigos.filter(inimigo => inimigo.userData.estado === 'FROTA');
+                
+                if (navesNaFrota.length > 0) {
+                    const kamikaze = navesNaFrota[Math.floor(Math.random() * navesNaFrota.length)];
+                    kamikaze.userData.estado = 'ATACANDO';
+                    
+                    scene.attach(kamikaze); 
+                    
+                    kamikaze.userData.tempoMergulho = 0;
+                    const direcaoAoJogador = naveJogador.position.x > kamikaze.position.x ? 1 : -1;
+                    kamikaze.userData.curvaX = direcaoAoJogador * 0.15; 
+                }
+            }
+        }
+
+        // --- SISTEMA DE INPUTS ---
         function onKeyDown(event) {
             if (event.key === 'Control') {
                 cameraAtiva = (cameraAtiva === cameraPerspetiva) ? cameraOrtografica : cameraPerspetiva;
             }
+            if (event.code === 'Tab') {
+                event.preventDefault(); 
+                hudVisivel = !hudVisivel; 
+                document.getElementById('hud').style.display = hudVisivel ? 'block' : 'none';
+            }
+
             if (event.code === 'ArrowLeft') teclas.ArrowLeft = true;
             if (event.code === 'ArrowRight') teclas.ArrowRight = true;
+            if (event.code === 'ArrowUp') teclas.ArrowUp = true;
+            if (event.code === 'ArrowDown') teclas.ArrowDown = true;
             if (event.code === 'Space') disparar();
         }
 
         function onKeyUp(event) {
-            // Quando a tecla é levantada, o movimento para
             if (event.code === 'ArrowLeft') teclas.ArrowLeft = false;
             if (event.code === 'ArrowRight') teclas.ArrowRight = false;
+            if (event.code === 'ArrowUp') teclas.ArrowUp = false;
+            if (event.code === 'ArrowDown') teclas.ArrowDown = false;
         }
 
         function onWindowResize() {
             const aspeto = window.innerWidth / window.innerHeight;
+            
             cameraPerspetiva.aspect = aspeto;
             cameraPerspetiva.updateProjectionMatrix();
+
+            const frustumSize = 85;
+            cameraOrtografica.left = - (frustumSize * aspeto) / 2;
+            cameraOrtografica.right = (frustumSize * aspeto) / 2;
+            cameraOrtografica.top = frustumSize / 2;
+            cameraOrtografica.bottom = - frustumSize / 2;
+            cameraOrtografica.updateProjectionMatrix();
+
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // Linha 151: O motor do jogo
+        // --- MOTOR PRINCIPAL ---
         function animate() {
             requestAnimationFrame(animate);
+
+            // 1. Câmaras (Chase Cam)
+            const angulo = naveJogador.rotation.z; 
+            if (cameraAtiva === cameraPerspetiva) {
+                cameraPerspetiva.position.x = naveJogador.position.x + Math.sin(angulo) * 30;
+                cameraPerspetiva.position.y = naveJogador.position.y - Math.cos(angulo) * 30;
+                cameraPerspetiva.position.z = 20;
+                cameraPerspetiva.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+            } else {
+                cameraOrtografica.position.x = naveJogador.position.x;
+                cameraOrtografica.position.y = naveJogador.position.y;
+                cameraOrtografica.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+            }
+            controls.target.copy(naveJogador.position);
             controls.update();
 
-            // Atualizar Movimento da Nave com limites de ecrã
-            if (teclas.ArrowLeft && naveJogador.position.x > -15) naveJogador.position.x -= 0.3;
-            if (teclas.ArrowRight && naveJogador.position.x < 15) naveJogador.position.x += 0.3;
+            // 2. Movimento da Nave
+            const velocidadeRotacao = 0.05;
+            const velocidadeMovimento = 0.4;
+            if (teclas.ArrowLeft) naveJogador.rotation.z += velocidadeRotacao;
+            if (teclas.ArrowRight) naveJogador.rotation.z -= velocidadeRotacao;
+            if (teclas.ArrowUp) {
+                naveJogador.position.x -= Math.sin(naveJogador.rotation.z) * velocidadeMovimento;
+                naveJogador.position.y += Math.cos(naveJogador.rotation.z) * velocidadeMovimento;
+            }
+            if (teclas.ArrowDown) {
+                naveJogador.position.x += Math.sin(naveJogador.rotation.z) * (velocidadeMovimento / 2); 
+                naveJogador.position.y -= Math.cos(naveJogador.rotation.z) * (velocidadeMovimento / 2);
+            }
 
-            // Atualizar Posição dos Lasers (Animação)
-            for (let i = lasers.length - 1; i >= 0; i--) {
-                lasers[i].position.y += 0.6; // Velocidade do tiro
+            // 3. IA Kamikaze e Movimento dos Inimigos
+            gerirAtaques();
+            for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                let inimigo = arrayInimigos[j];
+                if (inimigo.userData.estado === 'ATACANDO') {
+                    inimigo.userData.tempoMergulho += 0.05; 
+                    inimigo.position.y -= 0.35; 
+                    inimigo.position.x += inimigo.userData.curvaX + (Math.sin(inimigo.userData.tempoMergulho) * 0.12);
+                    inimigo.rotation.z = Math.sin(inimigo.userData.tempoMergulho) * 0.5;
 
-                // Gestão de memória: remover lasers que já saíram do ecrã
-                if (lasers[i].position.y > 20) {
-                    scene.remove(lasers[i]);
-                    lasers.splice(i, 1);
+                    if (inimigo.position.y < naveJogador.position.y - 30) {
+                        inimigo.position.y = naveJogador.position.y + 50;
+                    }
                 }
             }
+
+            // Animação geral da frota base
             if (grupoFrota) {
                 const tempo = Date.now() * 0.001; 
                 grupoFrota.position.x = Math.sin(tempo) * 4; 
-                grupoFrota.position.y = 20 + Math.cos(tempo * 2) * 0.5; 
+                grupoFrota.position.y = 26 + Math.cos(tempo * 2) * 0.5; 
+            }
+
+            // 4. Lógica de Tiro e Colisão
+            const vetorMundoInimigo = new THREE.Vector3();
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let laser = lasers[i];
+                laser.position.x += laser.userData.velX;
+                laser.position.y += laser.userData.velY;
+                
+                let laserDestruido = false;
+
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inimigo = arrayInimigos[j];
+                    inimigo.getWorldPosition(vetorMundoInimigo);
+
+                    if (laser.position.distanceTo(vetorMundoInimigo) < 2.5) {
+                        criarExplosao(vetorMundoInimigo);
+
+                        inimigo.parent.remove(inimigo); 
+                        arrayInimigos.splice(j, 1); 
+
+                        pontos += inimigo.userData.pontos;
+                        atualizarHUD(); 
+
+                        laser.geometry.dispose();
+                        laser.material.dispose();
+                        scene.remove(laser);
+                        lasers.splice(i, 1);
+                        laserDestruido = true;
+                        
+                        break; 
+                    }
+                }
+
+                if (laserDestruido) continue; 
+
+                if (Math.abs(laser.position.x) > 60 || Math.abs(laser.position.y) > 60) {
+                    laser.geometry.dispose();
+                    laser.material.dispose();
+                    scene.remove(laser);
+                    lasers.splice(i, 1);
+                }
+            }
+
+            // 5. Animação de Explosões
+            for (let i = explosoes.length - 1; i >= 0; i--) {
+                let exp = explosoes[i];
+                exp.children.forEach(fragmento => {
+                    fragmento.position.x += fragmento.userData.velX;
+                    fragmento.position.y += fragmento.userData.velY;
+                    fragmento.scale.multiplyScalar(0.85); 
+                });
+                exp.userData.tempoVida--;
+
+                if (exp.userData.tempoVida <= 0) {
+                    exp.children.forEach(fragmento => {
+                        fragmento.geometry.dispose();
+                        fragmento.material.dispose();
+                    });
+                    scene.remove(exp);
+                    explosoes.splice(i, 1);
+                }
             }
 
             renderer.render(scene, cameraAtiva);
