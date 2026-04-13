@@ -27,7 +27,7 @@
         
         let naveJogador;
         let lasers = []; // Array para gerir os tiros em cena
-        let teclas = { ArrowLeft: false, ArrowRight: false };
+        let teclas = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
         let ultimoDisparo = 0; // Controlo de cadência de tiro
 
         let grupoFrota;
@@ -52,6 +52,9 @@
 
             controls = new OrbitControls(cameraPerspetiva, renderer.domElement);
             controls.enableDamping = true;
+            controls.enablePan = false; // Impede que o utilizador "arraste" a câmara para fora da nave
+            controls.minDistance = 10;  // Limite de zoom aproximado
+            controls.maxDistance = 60;  // Limite de zoom afastado
 
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('keydown', onKeyDown);
@@ -64,8 +67,7 @@
             cameraPerspetiva = new THREE.PerspectiveCamera(45, aspeto, 0.1, 1000);
             cameraPerspetiva.position.set(0, -32, 18);
 
-            // Aumentamos o frustum para 50 para caber o ecrã inteiro (Nave no fundo, Frota no topo)
-            const frustumSize = 50; 
+            const frustumSize = 85; 
             cameraOrtografica = new THREE.OrthographicCamera(
                 (frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, 
                 frustumSize / 2, frustumSize / -2, 0.1, 1000
@@ -232,42 +234,53 @@
         }
     
 
-        // Linha 105: Lógica de Disparo e Luz Dinâmica (Requisito 3)
-        function disparar() {
+     function disparar() {
             const agora = Date.now();
-            if (agora - ultimoDisparo < 250) return; // Impede spam (máx 1 tiro a cada 250ms)
+            if (agora - ultimoDisparo < 250) return; 
             ultimoDisparo = agora;
 
-            // Criar o laser (MeshBasicMaterial não recebe sombras, brilha no escuro)
             const geometriaLaser = new THREE.CylinderGeometry(0.1, 0.1, 1.5);
             const materialLaser = new THREE.MeshBasicMaterial({ color: 0xff0000 });
             const laser = new THREE.Mesh(geometriaLaser, materialLaser);
 
-            // Anexar uma luz ao laser para iluminar o cenário por onde passa
             const luzLaser = new THREE.PointLight(0xff0000, 2, 10);
             laser.add(luzLaser);
 
+            // 1. O laser nasce na posição da nave
             laser.position.copy(naveJogador.position);
-            laser.position.y += 2; // O laser sai da ponta da nave
+            
+            // 2. O laser roda visualmente para ficar com o mesmo ângulo da nave
+            laser.rotation.z = naveJogador.rotation.z;
+
+            // 3. MATEMÁTICA: Guardamos o vetor de velocidade (Seno para o X, Cosseno para o Y)
+            const velocidadeTiro = 0.8;
+            laser.userData.velX = -Math.sin(naveJogador.rotation.z) * velocidadeTiro;
+            laser.userData.velY = Math.cos(naveJogador.rotation.z) * velocidadeTiro;
+
+            // Empurrar o laser ligeiramente para a frente para não nascer dentro do cockpit
+            laser.position.x += laser.userData.velX * 3;
+            laser.position.y += laser.userData.velY * 3;
 
             scene.add(laser);
             lasers.push(laser);
         }
 
-        // Linha 127: Gestão fluída de teclas
         function onKeyDown(event) {
             if (event.key === 'Control') {
                 cameraAtiva = (cameraAtiva === cameraPerspetiva) ? cameraOrtografica : cameraPerspetiva;
             }
             if (event.code === 'ArrowLeft') teclas.ArrowLeft = true;
             if (event.code === 'ArrowRight') teclas.ArrowRight = true;
+            if (event.code === 'ArrowUp') teclas.ArrowUp = true;
+            if (event.code === 'ArrowDown') teclas.ArrowDown = true;
             if (event.code === 'Space') disparar();
         }
 
         function onKeyUp(event) {
-            // Quando a tecla é levantada, o movimento para
             if (event.code === 'ArrowLeft') teclas.ArrowLeft = false;
             if (event.code === 'ArrowRight') teclas.ArrowRight = false;
+            if (event.code === 'ArrowUp') teclas.ArrowUp = false;
+            if (event.code === 'ArrowDown') teclas.ArrowDown = false;
         }
 
         function onWindowResize() {
@@ -293,16 +306,60 @@
             requestAnimationFrame(animate);
             controls.update();
 
-            // Atualizar Movimento da Nave com limites de ecrã
-            if (teclas.ArrowLeft && naveJogador.position.x > -15) naveJogador.position.x -= 0.3;
-            if (teclas.ArrowRight && naveJogador.position.x < 15) naveJogador.position.x += 0.3;
+            // --- CÂMARA DE PERSEGUIÇÃO DINÂMICA (Chase Cam) ---
+            const angulo = naveJogador.rotation.z; // Ângulo atual da nave
+            const distancia = 30; // Quão longe a câmara está atrás
+            const altura = 20;    // Quão alta a câmara está
 
-            // Atualizar Posição dos Lasers (Animação)
+            if (cameraAtiva === cameraPerspetiva) {
+                // MATEMÁTICA: Calculamos a posição da câmara usando o vetor inverso do bico da nave
+                // Se a nave aponta para 'angulo', a câmara deve estar em 'angulo + PI'
+                cameraPerspetiva.position.x = naveJogador.position.x + Math.sin(angulo) * distancia;
+                cameraPerspetiva.position.y = naveJogador.position.y - Math.cos(angulo) * distancia;
+                cameraPerspetiva.position.z = altura;
+
+                // TRUQUE DE ENGENHARIA: Alinhamos o "Up" da câmara com o "Frente" da nave
+                // Isto faz com que o ecrã rode para manter a nave vertical
+                cameraPerspetiva.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+                
+                controls.target.copy(naveJogador.position);
+            } else {
+                // No modo 2D, fazemos o mesmo para o scroll acompanhar a rotação visual
+                cameraOrtografica.position.x = naveJogador.position.x;
+                cameraOrtografica.position.y = naveJogador.position.y;
+                cameraOrtografica.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+                controls.target.copy(naveJogador.position);
+            }
+            
+            controls.update();
+            
+            controls.update();
+
+            // Movimento da Nave (Rotação 360º e Propulsão)
+            const velocidadeRotacao = 0.05;
+            const velocidadeMovimento = 0.4;
+
+            // Setas Esquerda/Direita agora giram a nave no eixo Z
+            if (teclas.ArrowLeft) naveJogador.rotation.z += velocidadeRotacao;
+            if (teclas.ArrowRight) naveJogador.rotation.z -= velocidadeRotacao;
+
+            // Setas Cima/Baixo empurram a nave na direção em que ela está a olhar
+            if (teclas.ArrowUp) {
+                naveJogador.position.x -= Math.sin(naveJogador.rotation.z) * velocidadeMovimento;
+                naveJogador.position.y += Math.cos(naveJogador.rotation.z) * velocidadeMovimento;
+            }
+            if (teclas.ArrowDown) {
+                naveJogador.position.x += Math.sin(naveJogador.rotation.z) * (velocidadeMovimento / 2); // Marcha atrás mais lenta
+                naveJogador.position.y -= Math.cos(naveJogador.rotation.z) * (velocidadeMovimento / 2);
+            }
+
+            // Movimento dos Lasers (Com base no vetor gravado no momento do disparo)
             for (let i = lasers.length - 1; i >= 0; i--) {
-                lasers[i].position.y += 0.6; // Velocidade do tiro
-
-                // Gestão de memória: remover lasers que já saíram do ecrã
-                if (lasers[i].position.y > 20) {
+                lasers[i].position.x += lasers[i].userData.velX;
+                lasers[i].position.y += lasers[i].userData.velY;
+                
+                // Destruir o laser se ele se afastar mais de 60 unidades do centro
+                if (Math.abs(lasers[i].position.x) > 60 || Math.abs(lasers[i].position.y) > 60) {
                     scene.remove(lasers[i]);
                     lasers.splice(i, 1);
                 }
