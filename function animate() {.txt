@@ -1,0 +1,239 @@
+function animate() {
+            // 1. FREEZE FRAME (Se morreste, pára imediatamente)
+            if (jogoAcabou) {
+                renderer.render(scene, cameraAtiva);
+                return; 
+            }
+
+            // 2. LOOP EXECUTADO APENAS 1 VEZ
+            requestAnimationFrame(animate);
+
+            const angulo = naveJogador.rotation.z; 
+            if (cameraAtiva === cameraPerspetiva) {
+                cameraPerspetiva.position.x = naveJogador.position.x + Math.sin(angulo) * 30;
+                cameraPerspetiva.position.y = naveJogador.position.y - Math.cos(angulo) * 30;
+                cameraPerspetiva.position.z = 20;
+                cameraPerspetiva.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+            } else {
+                cameraOrtografica.position.x = naveJogador.position.x;
+                cameraOrtografica.position.y = naveJogador.position.y;
+                cameraOrtografica.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+            }
+            controls.target.copy(naveJogador.position);
+            controls.update();
+
+            const velocidadeRotacao = 0.05;
+            const velocidadeMovimento = 0.4;
+            if (teclas.ArrowLeft) naveJogador.rotation.z += velocidadeRotacao;
+            if (teclas.ArrowRight) naveJogador.rotation.z -= velocidadeRotacao;
+            if (teclas.ArrowUp) {
+                naveJogador.position.x -= Math.sin(naveJogador.rotation.z) * velocidadeMovimento;
+                naveJogador.position.y += Math.cos(naveJogador.rotation.z) * velocidadeMovimento;
+            }
+            if (teclas.ArrowDown) {
+                naveJogador.position.x += Math.sin(naveJogador.rotation.z) * (velocidadeMovimento / 2); 
+                naveJogador.position.y -= Math.cos(naveJogador.rotation.z) * (velocidadeMovimento / 2);
+            }
+
+            gerirAtaques();
+            gerirReforcos();
+            // --- MOVIMENTO DOS INIMIGOS (IA DE PERSEGUIÇÃO) ---
+            for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                let inim = arrayInimigos[j]; // <--- CORREÇÃO: Definir a variável
+                
+                if (inim && inim.userData.estado === 'ATACANDO') {
+                    // Movimento Y (Vêm de cima ou de baixo)
+                    if (inim.position.y > naveJogador.position.y) {
+                        inim.position.y -= 0.25;
+                    } else {
+                        inim.position.y += 0.25;
+                    }
+
+                    // Movimento X (Perseguição lateral)
+                    const diffX = naveJogador.position.x - inim.position.x;
+                    inim.position.x += diffX * 0.01; 
+                    inim.rotation.z = -diffX * 0.05;
+
+                    // Se a nave se afastar demais, remove para poupar memória
+                    if (Math.abs(inim.position.y - naveJogador.position.y) > 80) {
+                        scene.remove(inim);
+                        if (inim.userData.setaGui) {
+                            scene.remove(inim.userData.setaGui);
+                            inim.userData.setaGui.material.dispose();
+                            inim.userData.setaGui.geometry.dispose();
+                        }
+                        arrayInimigos.splice(j, 1);
+                    }
+                }
+            }
+           
+            if (grupoFrota) {
+                const tempo = Date.now() * 0.001; 
+                grupoFrota.position.x = Math.sin(tempo) * 4; 
+                grupoFrota.position.y = 26 + Math.cos(tempo * 2) * 0.5; 
+            }
+
+            // OTIMIZAÇÃO: distanceToSquared usa 10x menos processamento! (3.0^2 = 9.0)
+            if (!invulneravel) {
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inimigo = arrayInimigos[j];
+                    inimigo.getWorldPosition(vetorMundoInimigo);
+
+                    if (naveJogador.position.distanceToSquared(vetorMundoInimigo) < 9.0) {
+                        if (escudoAtivo) {
+                            criarExplosao(vetorMundoInimigo);
+                            pontos += inimigo.userData.pontos;
+                            inimigo.parent.remove(inimigo);
+                            arrayInimigos.splice(j, 1);
+                            atualizarHUD();
+                        } else {
+                            vidas--;          
+                            atualizarHUD();   
+                            criarExplosao(vetorMundoInimigo);
+                            inimigo.parent.remove(inimigo);
+                            arrayInimigos.splice(j, 1);
+
+                           if (vidas <= 0) {
+                                document.getElementById('vidas').innerText = "0"; 
+                                document.getElementById('pontuacao-final').innerText = pontos;
+                                document.getElementById('ecra-gameover').style.display = 'flex';
+                                jogoAcabou = true;
+                            } else {
+                                invulneravel = true;
+                                tempoInvulneravel = Date.now();
+                            }
+                        }
+                        break; 
+                    }
+                }
+            }
+
+            // OTIMIZAÇÃO: 
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let laser = lasers[i];
+                laser.position.x += laser.userData.velX; 
+                laser.position.y += laser.userData.velY;
+                
+                let destruido = false; 
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inim = arrayInimigos[j];
+                    inim.getWorldPosition(vecInim);
+                    
+                    if (laser.position.distanceToSquared(vecInim) < 6.25) {
+                        criarExplosao(vecInim);
+                        inim.parent.remove(inim); arrayInimigos.splice(j, 1);
+                        pontos += inim.userData.pontos; atualizarHUD();
+                        
+                        // NÃO APAGA GEOMETRIAS AQUI PORQUE SÃO GLOBAIS! APENAS REMOVE.
+                        scene.remove(laser); lasers.splice(i, 1);
+                        destruido = true; 
+                        break;
+                    }
+                }
+
+                if (!destruido) {
+                    const distX = Math.abs(laser.position.x - naveJogador.position.x);
+                    const distY = Math.abs(laser.position.y - naveJogador.position.y);
+                    if (distX > 60 || distY > 60) {
+                        scene.remove(laser); 
+                        lasers.splice(i, 1);
+                    }
+                }
+            }
+            
+            for (let i = explosoes.length - 1; i >= 0; i--) {
+                let exp = explosoes[i];
+                exp.children.forEach(fragmento => {
+                    fragmento.position.x += fragmento.userData.velX;
+                    fragmento.position.y += fragmento.userData.velY;
+                    fragmento.scale.multiplyScalar(0.85); 
+                });
+                exp.userData.tempoVida--;
+
+                if (exp.userData.tempoVida <= 0) {
+                    // NÃO FAZEMOS DISPOSE PORQUE OS MATERIAIS SÃO GLOBAIS
+                    scene.remove(exp);
+                    explosoes.splice(i, 1);
+                }
+            }
+            
+            if (invulneravel) {
+                const agora = Date.now();
+                naveJogador.visible = Math.floor(agora / 100) % 2 === 0;
+                if (agora - tempoInvulneravel > 2000) {
+                    invulneravel = false;
+                    naveJogador.visible = true; 
+                }
+            }
+
+            if (cameraAtiva === cameraPerspetiva) {
+                visualBlocos.visible = false;
+                visual3D.visible = true;
+            } else {
+                visualBlocos.visible = true;
+                visual3D.visible = false;
+            }
+
+            const modo3DAtivo = (cameraAtiva === cameraPerspetiva);
+            arrayInimigos.forEach(inimigo => {
+                if (inimigo.userData.visualBlocos && inimigo.userData.visual3D) {
+                    inimigo.userData.visualBlocos.visible = !modo3DAtivo;
+                    inimigo.userData.visual3D.visible = modo3DAtivo;
+                }
+            });
+
+            const agora = Date.now();
+
+            if (teclas.ArrowUp) {
+                // USA O MATERIAL GLOBAL! (Poupança Absurda de RAM)
+                const particula = new THREE.Mesh(geoRastoGlobal, matRastoGlobal);
+                const recuo = 2.0; 
+                particula.position.x = naveJogador.position.x + Math.sin(naveJogador.rotation.z) * recuo;
+                particula.position.y = naveJogador.position.y - Math.cos(naveJogador.rotation.z) * recuo;
+                scene.add(particula);
+                particulasRasto.push({ malha: particula, tempoVida: 1.0 });
+            }
+
+            for (let i = particulasRasto.length - 1; i >= 0; i--) {
+                let p = particulasRasto[i];
+                p.malha.position.y -= 0.2; 
+                p.malha.scale.multiplyScalar(0.85); // Usa escala em vez de opacidade
+                p.tempoVida -= 0.05; 
+                
+                if (p.tempoVida <= 0) {
+                    scene.remove(p.malha);
+                    particulasRasto.splice(i, 1);
+                }
+            }
+
+            if (escudoAtivo) {
+                malhaEscudo.rotation.x += 0.05; malhaEscudo.rotation.y += 0.05; malhaEscudo.rotation.z += 0.02;
+                if (agora > tempoFimEscudo) {
+                    escudoAtivo = false; malhaEscudo.visible = false; cargaEscudo = 0; 
+                }
+            } else {
+                if (cargaEscudo < 100) {
+                    cargaEscudo += (agora - ultimaAtualizacaoEscudo) * (100 / 60000); 
+                    if (cargaEscudo > 100) cargaEscudo = 100;
+                }
+            }
+            ultimaAtualizacaoEscudo = agora;
+
+            if (hudVisivel) {
+                const elementoBarra = document.getElementById('barra-escudo');
+                elementoBarra.style.width = Math.floor(cargaEscudo) + '%';
+                elementoBarra.style.backgroundColor = cargaEscudo >= 100 ? '#00ffff' : '#ffaa00';
+            }
+
+            if (fundoEstrelas) {
+                const posicoes = fundoEstrelas.geometry.attributes.position.array;
+                for(let i = 0; i < posicoes.length; i += 3) { 
+                    posicoes[i+1] -= 0.5; 
+                    if (teclas.ArrowUp) posicoes[i+1] -= 1.0; 
+                    if (posicoes[i+1] < -150) posicoes[i+1] = 150;
+                }
+                fundoEstrelas.geometry.attributes.position.needsUpdate = true; 
+            }
+            
+            renderer.render(scene, cameraAtiva);
+        }
