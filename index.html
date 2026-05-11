@@ -11,7 +11,7 @@
             position: absolute; top: 0; left: 0; width: 100%;
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold; text-align: center;
-            display: block; pointer-events: none; z-index: 10;
+            display: none; pointer-events: none; z-index: 10;
         }
         .hud-container { display: flex; justify-content: space-around; padding-top: 20px; }
         .titulo { color: red; font-size: 24px; }
@@ -37,6 +37,44 @@
         }
         .piscar { animation: blink 1s infinite; color: #ffff00 !important; font-size: 35px; margin-top: 30px; }
         @keyframes blink { 50% { opacity: 0; } }
+
+        /* ===== MENU ===== */
+        #menu {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 200; background: #000;
+        }
+        #menu-canvas { position: absolute; inset: 0; z-index: 0; }
+        .menu-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+        .logo-galaga {
+            font-size: clamp(48px, 10vw, 96px); font-weight: bold;
+            letter-spacing: 12px; color: #fff;
+            text-shadow: 0 0 10px #fff, 0 0 30px #f0f, 0 0 60px #f0f;
+            animation: pulso 2s ease-in-out infinite; margin-bottom: 8px;
+        }
+        .logo-sub { font-size: clamp(12px,2vw,18px); color: #ff0; letter-spacing: 6px; margin-bottom: 50px; animation: pisca 1.2s step-end infinite; }
+        @keyframes pulso { 0%,100%{text-shadow:0 0 10px #fff,0 0 30px #f0f,0 0 60px #f0f} 50%{text-shadow:0 0 20px #fff,0 0 50px #f0f,0 0 100px #f0f} }
+        @keyframes pisca-btn { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .painel { background: rgba(0,0,30,0.85); border: 1px solid rgba(100,100,255,0.4); border-radius: 12px; padding: 28px 40px; min-width: 380px; margin-bottom: 32px; }
+        .painel-titulo { color: #88aaff; font-size: 11px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 20px; text-align: center; }
+        .def-linha { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+        .def-linha:last-child { margin-bottom: 0; }
+        .def-label { color: #aaa; font-size: 13px; letter-spacing: 1px; min-width: 110px; }
+        .def-ctrl { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end; }
+        .toggle { position: relative; width: 44px; height: 22px; cursor: pointer; }
+        .toggle input { display: none; }
+        .toggle-pista { position: absolute; inset: 0; background: #222; border: 1px solid #444; border-radius: 11px; transition: background .2s; }
+        .toggle input:checked ~ .toggle-pista { background: #4466ff; border-color: #4466ff; }
+        .toggle-bolinha { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #666; border-radius: 50%; transition: transform .2s, background .2s; }
+        .toggle input:checked ~ .toggle-bolinha { transform: translateX(22px); background: #fff; }
+        .vol-slider { -webkit-appearance: none; appearance: none; width: 130px; height: 4px; background: #333; border-radius: 2px; outline: none; cursor: pointer; }
+        .vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #4466ff; cursor: pointer; }
+        .vol-slider:hover::-webkit-slider-thumb { background: #88aaff; }
+        .vol-val { color: #88aaff; font-size: 12px; min-width: 32px; text-align: right; }
+        .btn-jogar { background: transparent; border: 2px solid #ff0; color: #ff0; font-family: 'Courier New', monospace; font-size: clamp(16px,3vw,22px); font-weight: bold; letter-spacing: 6px; padding: 14px 48px; border-radius: 4px; cursor: pointer; text-transform: uppercase; transition: all .15s; animation: pisca-btn 1.8s ease-in-out infinite; }
+        .btn-jogar:hover { background: #ff0; color: #000; animation: none; transform: scale(1.04); }
+        .menu-rodape { position: absolute; bottom: 24px; color: #333; font-size: 11px; letter-spacing: 2px; }
     </style>
     <script type="importmap">
       {
@@ -48,6 +86,44 @@
     </script>
 </head>
 <body>
+    <div id="menu">
+        <canvas id="menu-canvas"></canvas>
+        <div class="menu-content">
+            <div class="logo-galaga">GALAGA</div>
+            <div class="logo-sub">3D · Ultimate Edition</div>
+            <div class="painel">
+                <div class="painel-titulo">— Definições —</div>
+                <div class="def-linha">
+                    <span class="def-label">Som</span>
+                    <div class="def-ctrl">
+                        <label class="toggle"><input type="checkbox" id="tog-som" checked><span class="toggle-pista"></span><span class="toggle-bolinha"></span></label>
+                    </div>
+                </div>
+                <div class="def-linha">
+                    <span class="def-label">Volume SFX</span>
+                    <div class="def-ctrl">
+                        <input type="range" class="vol-slider" id="sl-sfx" min="0" max="100" value="70">
+                        <span class="vol-val" id="vl-sfx">70%</span>
+                    </div>
+                </div>
+                <div class="def-linha">
+                    <span class="def-label">Música</span>
+                    <div class="def-ctrl">
+                        <label class="toggle"><input type="checkbox" id="tog-musica" checked><span class="toggle-pista"></span><span class="toggle-bolinha"></span></label>
+                    </div>
+                </div>
+                <div class="def-linha">
+                    <span class="def-label">Vol. Música</span>
+                    <div class="def-ctrl">
+                        <input type="range" class="vol-slider" id="sl-musica" min="0" max="100" value="50">
+                        <span class="vol-val" id="vl-musica">50%</span>
+                    </div>
+                </div>
+            </div>
+            <button class="btn-jogar" id="btn-jogar">▶  JOGAR</button>
+        </div>
+        <div class="menu-rodape">SETAS: MOVER &nbsp;|&nbsp; Z: DISPARAR &nbsp;|&nbsp; W: ESCUDO &nbsp;|&nbsp; SPACE: ONDA &nbsp;|&nbsp; CTRL: CÂMARA &nbsp;|&nbsp; TAB: HUD</div>
+    </div>
     <div id="hud">
         <div class="hud-container">
             <div><div class="titulo">1UP</div><div id="pontuacao" class="valor">0</div></div>
@@ -69,6 +145,50 @@
         <p class="piscar">INSERT COIN (Pressiona ENTER)</p>
         <h1 id="texto-gameover">GAME OVER</h1>
     </div>
+
+    <script>
+    (function () {
+        // Estrelas animadas
+        const canvas = document.getElementById('menu-canvas');
+        const ctx = canvas.getContext('2d');
+        const estrelas = [];
+        function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+        resize(); window.addEventListener('resize', resize);
+        for (let i = 0; i < 220; i++) estrelas.push({ x: Math.random()*innerWidth, y: Math.random()*innerHeight, r: Math.random()*1.5+0.3, vel: Math.random()*0.4+0.1, b: Math.random() });
+        (function loop() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            const t = Date.now()*0.001;
+            estrelas.forEach(e => {
+                e.y += e.vel;
+                if (e.y > canvas.height) { e.y = 0; e.x = Math.random()*canvas.width; }
+                const a = 0.4 + 0.6*Math.abs(Math.sin(t*1.5+e.b*10));
+                ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+                ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
+            });
+            requestAnimationFrame(loop);
+        })();
+
+        // Sliders
+        const slSfx = document.getElementById('sl-sfx'), vlSfx = document.getElementById('vl-sfx');
+        slSfx.addEventListener('input', () => vlSfx.textContent = slSfx.value+'%');
+        const slMus = document.getElementById('sl-musica'), vlMus = document.getElementById('vl-musica');
+        slMus.addEventListener('input', () => vlMus.textContent = slMus.value+'%');
+        document.getElementById('tog-som').addEventListener('change', function() { slSfx.disabled=!this.checked; slSfx.style.opacity=this.checked?'1':'0.3'; });
+        document.getElementById('tog-musica').addEventListener('change', function() { slMus.disabled=!this.checked; slMus.style.opacity=this.checked?'1':'0.3'; });
+
+        // Botão Jogar
+        document.getElementById('btn-jogar').addEventListener('click', () => {
+            window.configSom = {
+                somAtivo:     document.getElementById('tog-som').checked,
+                volumeSfx:    parseInt(slSfx.value)/100,
+                musicaAtiva:  document.getElementById('tog-musica').checked,
+                volumeMusica: parseInt(slMus.value)/100
+            };
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+        });
+    })();
+    </script>
 
     <script type="module">
         import * as THREE from 'three';
