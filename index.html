@@ -51,7 +51,7 @@
     <div id="hud">
         <div class="hud-container">
             <div><div class="titulo">1UP</div><div id="pontuacao" class="valor">0</div></div>
-            <div><div class="titulo">HIGH SCORE</div><div id="highscore" class="valor">20000</div></div>
+            <div><div class="titulo">HIGH SCORE</div><div id="highscore" class="valor">0</div></div>
             <div><div class="titulo">VIDAS</div><div id="vidas" class="valor">3</div></div>
             <div>
                 <div class="titulo">ESCUDO (W)</div>
@@ -84,7 +84,8 @@
         let lasers = [], arrayInimigos = [], explosoes = [], particulasRasto = [];
         let teclas = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
         
-        let pontos = 0, pontuacaoMaxima = 20000, vidas = 3;
+        let pontos = 0, vidas = 3;
+        let pontuacaoMaxima = parseInt(localStorage.getItem('galaga_highscore')) || 0;
         let hudVisivel = true, jogoAcabou = false;
         let invulneravel = false, tempoInvulneravel = 0, proximoBonusVida = 5000; 
         
@@ -169,13 +170,19 @@
             controls.enableDamping = true; controls.enablePan = false;
             controls.minDistance = 10; controls.maxDistance = 60;
 
+            atualizarHUD();
+
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
         }
 
         function atualizarHUD() {
-            if (pontos > pontuacaoMaxima) pontuacaoMaxima = pontos;
+            if (pontos > pontuacaoMaxima) {
+            pontuacaoMaxima = pontos;
+            localStorage.setItem('galaga_highscore', pontuacaoMaxima);
+            }
+
             if (pontos >= proximoBonusVida) { vidas++; proximoBonusVida += 10000; }
 
             intervaloSpawn = Math.max(400, 1500 - (pontos * 0.05));
@@ -386,7 +393,7 @@
                     break;
                 case 3: // Destaque/Supernova
                     fundoEstrelas.visible = true;
-                    fundoEstrelas.material.size = 12.0; 
+                    fundoEstrelas.material.size = 10.0; 
                     fundoEstrelas.material.opacity = 1.0;
                     fundoEstrelas.material.color.setHex(0xffffff); 
                     break;
@@ -447,10 +454,11 @@
             
             const tex = new THREE.CanvasTexture(canvas);
             const geo = new THREE.BufferGeometry(); 
-            const pos = new Float32Array(3000 * 3); // 3000 estrelas!
-            for(let i = 0; i < 9000; i += 3) {
-                pos[i] = (Math.random() - 0.5) * 300;     
-                pos[i+1] = (Math.random() - 0.5) * 300;   
+            const pos = new Float32Array(8000 * 3); // 3000 estrelas!
+            for(let i = 0; i < 24000; i += 3) {
+                // A área original era de 300x300. Agora é de 800x800 unidades!
+                pos[i] = (Math.random() - 0.5) * 800;     
+                pos[i+1] = (Math.random() - 0.5) * 800;   
                 pos[i+2] = (Math.random() - 0.5) * 40 - 60; 
             }
             geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -667,12 +675,11 @@
                     pos[i+1] -= 0.5; 
                     if (teclas.ArrowUp) pos[i+1] -= 1.0; 
                     
-                    // Wrapping (Teletransporte das estrelas para acompanharem a nave)
-                    if (pos[i+1] < cY - 150) pos[i+1] += 300;
-                    else if (pos[i+1] > cY + 150) pos[i+1] -= 300;
+                    if (pos[i+1] < cY - 400) pos[i+1] += 800;
+                    else if (pos[i+1] > cY + 400) pos[i+1] -= 800;
                     
-                    if (pos[i] < cX - 150) pos[i] += 300;
-                    else if (pos[i] > cX + 150) pos[i] -= 300;
+                    if (pos[i] < cX - 400) pos[i] += 800;
+                    else if (pos[i] > cX + 400) pos[i] -= 800;
                 }
                 fundoEstrelas.geometry.attributes.position.needsUpdate = true; 
             }
