@@ -49,6 +49,7 @@
             </div>
         </div>
     </div>
+    
 
     <script type="module">
         import * as THREE from 'three';
@@ -76,6 +77,15 @@
         let vidas = 3;
         let hudVisivel = false;
         
+        const TETO_INIMIGOS = 50; // O limite máximo para proteger os FPS
+        let ultimoReforco = 0;    // Temporizador
+        let catalogoNaves = {};   // Guarda as plantas das naves para reutilizarmos
+
+        let invulneravel = false;
+        let tempoInvulneravel = 0;
+
+        let proximoBonusVida = 10000; // Define o primeiro patamar para a vida extra
+
 
         init();
         animate();
@@ -108,6 +118,16 @@
         // --- SISTEMA DE UI (HUD) ---
         function atualizarHUD() {
             if (pontos > pontuacaoMaxima) pontuacaoMaxima = pontos;
+
+            if (pontos >= proximoBonusVida) {
+                vidas++;
+                proximoBonusVida += 10000; // Incrementa o próximo objetivo (20k, 30k, etc.)
+                
+                // Feedback visual opcional: podes fazer a luz da nave brilhar 
+                // ou simplesmente um log para debug
+                console.log("Parabéns! Vida extra ganha. Próximo objetivo: " + proximoBonusVida);
+            }
+
             document.getElementById('pontuacao').innerText = pontos;
             document.getElementById('highscore').innerText = pontuacaoMaxima;
             document.getElementById('vidas').innerText = vidas;
@@ -234,6 +254,10 @@
                 [-1, -2, cB], [1, -2, cB]
             ];
 
+            catalogoNaves.Zako = designZako;
+            catalogoNaves.Goei = designGoei;
+            catalogoNaves.Boss = designBoss;
+
             const colunas = 10;
             const linhas = 5; 
             const espacamentoX = 6.5; 
@@ -268,31 +292,40 @@
             scene.add(grupoFrota);
         }
 
-        // --- SISTEMA DE FÍSICA E COMBATE ---
+        // --- SISTEMA DE COMBATE (TIRO DUPLO LIVRE) ---
         function disparar() {
-            const agora = Date.now();
-            if (agora - ultimoDisparo < 250) return; 
-            ultimoDisparo = agora;
-
-            const geometriaLaser = new THREE.CylinderGeometry(0.1, 0.1, 1.5);
+            // Removido o bloqueio de tempo (ultimoDisparo)! Dispara sempre que é chamada.
+            const geometriaLaser = new THREE.CylinderGeometry(0.15, 0.15, 2.0); 
             const materialLaser = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            const laser = new THREE.Mesh(geometriaLaser, materialLaser);
 
-            // Laser nasce na posição da nave com a mesma rotação
-            laser.position.copy(naveJogador.position);
-            laser.rotation.z = naveJogador.rotation.z;
+            const angulo = naveJogador.rotation.z;
+            const dirX = -Math.sin(angulo);
+            const dirY = Math.cos(angulo);
+            const latX = Math.cos(angulo);
+            const latY = Math.sin(angulo);
+            
+            const velocidadeTiro = 1.2;
+            const envergadura = 1.4; 
+            const projecao = 2.5;    
 
-            // Vetores de velocidade
-            const velocidadeTiro = 0.8;
-            laser.userData.velX = -Math.sin(naveJogador.rotation.z) * velocidadeTiro;
-            laser.userData.velY = Math.cos(naveJogador.rotation.z) * velocidadeTiro;
+            // ... (O resto do código de criar o laserEsq e laserDir mantém-se igual)
+            const laserEsq = new THREE.Mesh(geometriaLaser, materialLaser);
+            laserEsq.position.x = naveJogador.position.x - (latX * envergadura) + (dirX * projecao);
+            laserEsq.position.y = naveJogador.position.y - (latY * envergadura) + (dirY * projecao);
+            laserEsq.rotation.z = angulo;
+            laserEsq.userData.velX = dirX * velocidadeTiro;
+            laserEsq.userData.velY = dirY * velocidadeTiro;
+            scene.add(laserEsq);
+            lasers.push(laserEsq);
 
-            // Afastar do bico da nave
-            laser.position.x += laser.userData.velX * 3;
-            laser.position.y += laser.userData.velY * 3;
-
-            scene.add(laser);
-            lasers.push(laser);
+            const laserDir = new THREE.Mesh(geometriaLaser, materialLaser);
+            laserDir.position.x = naveJogador.position.x + (latX * envergadura) + (dirX * projecao);
+            laserDir.position.y = naveJogador.position.y + (latY * envergadura) + (dirY * projecao);
+            laserDir.rotation.z = angulo;
+            laserDir.userData.velX = dirX * velocidadeTiro;
+            laserDir.userData.velY = dirY * velocidadeTiro;
+            scene.add(laserDir);
+            lasers.push(laserDir);
         }
 
         function criarExplosao(posicaoMundo) {
@@ -343,6 +376,46 @@
             }
         }
 
+        // --- INTELIGÊNCIA ARTIFICIAL: REFORÇOS ---
+        function gerirReforcos() {
+            const agora = Date.now();
+            
+            // Se houver espaço no "teto" e tiver passado 1.5 segundos desde o último reforço
+            if (arrayInimigos.length < TETO_INIMIGOS && agora - ultimoReforco > 1500) {
+                ultimoReforco = agora;
+
+                // 1. Sorteio de qual nave vai nascer
+                const sorteio = Math.random();
+                let matriz, pontos;
+                
+                if (sorteio > 0.8) { 
+                    matriz = catalogoNaves.Boss; pontos = 400; 
+                } else if (sorteio > 0.4) { 
+                    matriz = catalogoNaves.Goei; pontos = 160; 
+                } else { 
+                    matriz = catalogoNaves.Zako; pontos = 80; 
+                }
+
+                // 2. Fabricar o novo inimigo usando a nossa fábrica otimizada
+                const novoInimigo = fabricarInimigo(matriz, pontos);
+
+                // 3. Posicionar no topo, bem fora do ecrã, numa posição X aleatória
+                novoInimigo.position.x = naveJogador.position.x + ((Math.random() - 0.5) * 40);
+                novoInimigo.position.y = naveJogador.position.y + 60; // Nasce lá no alto
+
+                // 4. Alterar a Máquina de Estados: Em vez de parar na frota, entra em modo Kamikaze
+                novoInimigo.userData.estado = 'ATACANDO';
+                novoInimigo.userData.tempoMergulho = 0;
+                
+                const direcaoAoJogador = naveJogador.position.x > novoInimigo.position.x ? 1 : -1;
+                novoInimigo.userData.curvaX = direcaoAoJogador * 0.15; 
+
+                // 5. Adicionar diretamente ao mundo e à lista de alvos
+                scene.add(novoInimigo);
+                arrayInimigos.push(novoInimigo);
+            }
+        }
+
         // --- SISTEMA DE INPUTS ---
         function onKeyDown(event) {
             if (event.key === 'Control') {
@@ -358,7 +431,7 @@
             if (event.code === 'ArrowRight') teclas.ArrowRight = true;
             if (event.code === 'ArrowUp') teclas.ArrowUp = true;
             if (event.code === 'ArrowDown') teclas.ArrowDown = true;
-            if (event.code === 'Space') disparar();
+            if (event.code === 'KeyZ') disparar();
         }
 
         function onKeyUp(event) {
@@ -419,20 +492,30 @@
 
             // 3. IA Kamikaze e Movimento dos Inimigos
             gerirAtaques();
+            gerirReforcos();
             for (let j = arrayInimigos.length - 1; j >= 0; j--) {
                 let inimigo = arrayInimigos[j];
                 if (inimigo.userData.estado === 'ATACANDO') {
-                    inimigo.userData.tempoMergulho += 0.05; 
-                    inimigo.position.y -= 0.35; 
-                    inimigo.position.x += inimigo.userData.curvaX + (Math.sin(inimigo.userData.tempoMergulho) * 0.12);
-                    inimigo.rotation.z = Math.sin(inimigo.userData.tempoMergulho) * 0.5;
+                    
+                    // Velocidade de mergulho
+                    inimigo.position.y -= 0.4; 
+                    
+                    // IA DE PERSEGUIÇÃO: O inimigo descobre onde o jogador está e vira para lá
+                    const distanciaX = naveJogador.position.x - inimigo.position.x;
+                    inimigo.position.x += distanciaX * 0.02; // O 0.02 é a agressividade da curva
 
+                    // Roda a nave para inclinar no sentido da curva
+                    inimigo.rotation.z = -distanciaX * 0.05;
+
+                    // Se falhar o alvo e passar do ecrã, é apagado (O Diretor cria reforços depois)
                     if (inimigo.position.y < naveJogador.position.y - 30) {
-                        inimigo.position.y = naveJogador.position.y + 50;
+                        inimigo.parent.remove(inimigo);
+                        arrayInimigos.splice(j, 1);
+                        continue;
                     }
                 }
             }
-
+           
             // Animação geral da frota base
             if (grupoFrota) {
                 const tempo = Date.now() * 0.001; 
@@ -440,47 +523,79 @@
                 grupoFrota.position.y = 26 + Math.cos(tempo * 2) * 0.5; 
             }
 
-            // 4. Lógica de Tiro e Colisão
-            const vetorMundoInimigo = new THREE.Vector3();
-            for (let i = lasers.length - 1; i >= 0; i--) {
-                let laser = lasers[i];
-                laser.position.x += laser.userData.velX;
-                laser.position.y += laser.userData.velY;
+            // --- LÓGICA DE COLISÃO: INIMIGO BATE NO JOGADOR ---
+            if (!invulneravel) {
+                const vetorMundoInimigo = new THREE.Vector3();
                 
-                let laserDestruido = false;
-
                 for (let j = arrayInimigos.length - 1; j >= 0; j--) {
                     let inimigo = arrayInimigos[j];
                     inimigo.getWorldPosition(vetorMundoInimigo);
 
-                    if (laser.position.distanceTo(vetorMundoInimigo) < 2.5) {
-                        criarExplosao(vetorMundoInimigo);
-
-                        inimigo.parent.remove(inimigo); 
-                        arrayInimigos.splice(j, 1); 
-
-                        pontos += inimigo.userData.pontos;
-                        atualizarHUD(); 
-
-                        laser.geometry.dispose();
-                        laser.material.dispose();
-                        scene.remove(laser);
-                        lasers.splice(i, 1);
-                        laserDestruido = true;
+                    // Se a distância entre o centro do inimigo e a tua nave for menor que 3 unidades
+                    if (naveJogador.position.distanceTo(vetorMundoInimigo) < 3.0) {
                         
-                        break; 
+                        vidas--;          // Perde uma vida
+                        atualizarHUD();   // Atualiza o ecrã
+                        
+                        // O inimigo que te bateu explode em pedaços e morre
+                        criarExplosao(vetorMundoInimigo);
+                        inimigo.parent.remove(inimigo);
+                        arrayInimigos.splice(j, 1);
+
+                        if (vidas <= 0) {
+                            // GAME OVER - Reinicia o jogo por agora
+                            alert("GAME OVER! A tua pontuação: " + pontos);
+                            location.reload(); 
+                        } else {
+                            // Ativa o escudo temporário de 2 segundos
+                            invulneravel = true;
+                            tempoInvulneravel = Date.now();
+                        }
+                        break; // Bateu num, não precisa de calcular os outros neste frame
+                    }
+                }
+            }
+
+            // 4. Colisão Tiros Jogador vs Inimigos (COM A BOLHA DINÂMICA)
+            const vecInim = new THREE.Vector3();
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let laser = lasers[i];
+                laser.position.x += laser.userData.velX; 
+                laser.position.y += laser.userData.velY;
+                
+                let destruido = false; // AQUI ESTÁ A DEFINIÇÃO QUE FALTAVA!
+                
+                // 1º Passo: Verifica se o tiro bateu num inimigo
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inim = arrayInimigos[j];
+                    inim.getWorldPosition(vecInim);
+                    
+                    if (laser.position.distanceTo(vecInim) < 2.5) {
+                        criarExplosao(vecInim);
+                        inim.parent.remove(inim); arrayInimigos.splice(j, 1);
+                        pontos += inim.userData.pontos; atualizarHUD();
+                        
+                        laser.geometry.dispose(); laser.material.dispose(); scene.remove(laser); lasers.splice(i, 1);
+                        destruido = true; // O tiro fez o seu trabalho
+                        break;
                     }
                 }
 
-                if (laserDestruido) continue; 
-
-                if (Math.abs(laser.position.x) > 60 || Math.abs(laser.position.y) > 60) {
-                    laser.geometry.dispose();
-                    laser.material.dispose();
-                    scene.remove(laser);
-                    lasers.splice(i, 1);
+                // 2º Passo: O GARBAGE COLLECTOR (A Bolha Dinâmica)
+                // Se o tiro não bateu em nada (!destruido), verifica se já foi para muito longe da nave
+                if (!destruido) {
+                    const distX = Math.abs(laser.position.x - naveJogador.position.x);
+                    const distY = Math.abs(laser.position.y - naveJogador.position.y);
+                    
+                    if (distX > 60 || distY > 60) {
+                        laser.geometry.dispose(); 
+                        laser.material.dispose(); 
+                        scene.remove(laser); 
+                        lasers.splice(i, 1);
+                    }
                 }
             }
+            
 
             // 5. Animação de Explosões
             for (let i = explosoes.length - 1; i >= 0; i--) {
@@ -501,7 +616,18 @@
                     explosoes.splice(i, 1);
                 }
             }
-
+             // --- GESTOR DE INVULNERABILIDADE (PISCAR A NAVE) ---
+            if (invulneravel) {
+                const agora = Date.now();
+                // A matemática do Resto (%) faz a nave ficar visível/invisível a cada 100 milissegundos
+                naveJogador.visible = Math.floor(agora / 100) % 2 === 0;
+                
+                // Passados 2 segundos (2000 ms), o escudo desliga e a nave volta a ser física
+                if (agora - tempoInvulneravel > 2000) {
+                    invulneravel = false;
+                    naveJogador.visible = true; // Garante que não fica invisível presa
+                }
+            }
             renderer.render(scene, cameraAtiva);
         }
     </script>
