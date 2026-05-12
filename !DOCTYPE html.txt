@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Galaga 3D - Fully Optimized</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        
+        /* Interface de Jogo */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold; text-align: center;
+            display: none; 
+            pointer-events: none; 
+            z-index: 10;
+        }
+        .hud-container {
+            display: flex; justify-content: space-around; padding-top: 20px;
+        }
+        .titulo { color: red; font-size: 28px; }
+        .valor { color: white; font-size: 28px; }
+        .barra-container {
+            width: 150px; height: 15px; 
+            background-color: #333; 
+            border: 2px solid white; 
+            margin: 5px auto 0 auto;
+        }
+        #barra-escudo {
+            width: 100%; height: 100%; 
+            background-color: #00ffff; 
+            transition: width 0.1s;
+        }
+        
+        /* Ecrã Game Over Isolado e Blindado */
+        #ecra-gameover {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: rgba(0, 0, 0, 0.85); 
+            display: none; flex-direction: column; 
+            align-items: center; justify-content: flex-start;
+            padding-top: 15vh;
+            font-family: 'Courier New', Courier, monospace; 
+            z-index: 999999;
+            pointer-events: auto;
+        }
+        #texto-pontuacao { color: white; font-size: 40px; font-weight: bold; margin: 0; }
+        #texto-gameover { 
+            color: #ff0000; font-size: 180px; 
+            margin-top: auto; margin-bottom: 10vh;
+            text-shadow: 0 0 30px #ff0000; letter-spacing: 15px; 
+        }
+        .piscar { animation: blink 1s infinite; color: #ffff00 !important; font-size: 35px; margin-top: 30px; }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+</head>
+<body>
+    <div id="hud">
+        <div class="hud-container">
+            <div>
+                <div class="titulo">1UP</div>
+                <div id="pontuacao" class="valor">0</div>
+            </div>
+            <div>
+                <div class="titulo">HIGH SCORE</div>
+                <div id="highscore" class="valor">20000</div>
+            </div>
+            <div>
+                <div class="titulo">VIDAS</div>
+                <div id="vidas" class="valor">3</div>
+            </div>
+            <div>
+                <div class="titulo">ESCUDO (W)</div>
+                <div class="barra-container"><div id="barra-escudo"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ecra-gameover">
+        <p id="texto-pontuacao">PONTUAÇÃO: <span id="pontuacao-final">0</span></p>
+        <p class="piscar">INSERT COIN (Pressiona ENTER)</p>
+        <h1 id="texto-gameover">GAME OVER</h1>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // --- VARIÁVEIS GLOBAIS ---
+        let scene, renderer, controls;
+        let cameraPerspetiva, cameraOrtografica, cameraAtiva;
+        let naveJogador;
+        
+        let lasers = []; 
+        let grupoFrota; 
+        let arrayInimigos = [];
+        let explosoes = [];
+
+        let teclas = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
+        let ultimoAtaqueInimigo = 0;
+        
+        let pontos = 0;
+        let pontuacaoMaxima = 20000;
+        let vidas = 3;
+        let hudVisivel = false;
+        
+        const TETO_INIMIGOS = 50; 
+        let ultimoReforco = 0;    
+        let catalogoNaves = {};   
+
+        let invulneravel = false;
+        let tempoInvulneravel = 0;
+        let proximoBonusVida = 10000; 
+
+        let visualBlocos = new THREE.Group();
+        let visual3D = new THREE.Group();
+
+        let jogoAcabou = false;
+
+        // --- OTIMIZAÇÃO: MATERIAIS GLOBAIS (Evita Memory Leaks) ---
+        const geoLaserGlobal = new THREE.CylinderGeometry(0.15, 0.15, 2.0);
+        const matLaserGlobal = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        
+        const geoExplosaoGlobal = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+        const matExplosaoAmarelo = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const matExplosaoCiano = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const matExplosaoBranco = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const materiaisExplosaoGlobais = [matExplosaoAmarelo, matExplosaoCiano, matExplosaoBranco];
+
+        const geoRastoGlobal = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const matRastoGlobal = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
+        let particulasRasto = [];
+
+        // --- OTIMIZAÇÃO: VETORES GLOBAIS (Evita criação de lixo no Game Loop) ---
+        const vetorMundoInimigo = new THREE.Vector3();
+        const vecInim = new THREE.Vector3();
+
+        // Variáveis Escudo e Fundo
+        let malhaEscudo;
+        let escudoAtivo = false;
+        let tempoFimEscudo = 0;       
+        let cargaEscudo = 100;        
+        let ultimaAtualizacaoEscudo = Date.now();
+        let fundoEstrelas;
+        
+        // Molde da seta (um triângulo simples)
+        const formaSeta = new THREE.Shape();
+        formaSeta.moveTo(0, 1);
+        formaSeta.lineTo(0.5, 0);
+        formaSeta.lineTo(-0.5, 0);
+        formaSeta.lineTo(0, 1);
+        const geoSeta = new THREE.ShapeGeometry(formaSeta);
+
+        let filaElite = [
+        'Boss', 
+        'Tanque', 'Tanque', 'Tanque', 
+        'PortaAvioes', 'PortaAvioes', 
+        'Kamikaze', 'Kamikaze', 
+        'Caca', 'Caca', 'Caca', 'Caca', 'Caca' // As "centinelas" que pediste
+        ];
+
+        init();
+        animate();
+
+        function init() {
+
+            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff });
+            const cVerde = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff });
+            const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+            const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff });
+            const cLaranja = new THREE.MeshStandardMaterial({ color: 0xff8800 });
+
+            catalogoNaves = {
+                Kamikaze: [[0, 3, cV], [-1, 2, cV], [1, 2, cV], [0, 1, cB], [-1, 0, cAmarelo], [1, 0, cAmarelo]],
+                Caca: [[-2, 1, cCiano], [2, 1, cCiano], [-1, 0, cB], [0, 0, cA], [1, 0, cB]],
+                Tanque: [[-3, 2, cCiano], [3, 2, cCiano], [-2, 1, cVerde], [2, 1, cVerde], [0, 0, cV]],
+                PortaAvioes: [[-4, 1, cRoxo], [4, 1, cRoxo], [0, 0, cLaranja], [-2, -1, cB], [2, -1, cB]],
+                Boss: [[0, 4, cV], [-2, 2, cLaranja], [2, 2, cLaranja], [0, 1, cB], [-3, 0, cRoxo], [3, 0, cRoxo]]
+            };
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            
+            configurarCamaras();
+            configurarLuzes();
+            criarFundo();
+            criarNave();
+            criarFrota();
+
+            controls = new OrbitControls(cameraPerspetiva, renderer.domElement);
+            controls.enableDamping = true;
+            controls.enablePan = false;
+            controls.minDistance = 10;
+            controls.maxDistance = 60;
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+        }
+
+        function atualizarHUD() {
+            if (pontos > pontuacaoMaxima) pontuacaoMaxima = pontos;
+
+            if (pontos >= proximoBonusVida) {
+                vidas++;
+                proximoBonusVida += 10000; 
+            }
+
+            document.getElementById('pontuacao').innerText = pontos;
+            document.getElementById('highscore').innerText = pontuacaoMaxima;
+            document.getElementById('vidas').innerText = vidas;
+        }
+
+        function configurarCamaras() {
+            const aspeto = window.innerWidth / window.innerHeight;
+            
+            cameraPerspetiva = new THREE.PerspectiveCamera(45, aspeto, 0.1, 1000);
+            cameraPerspetiva.position.set(0, -32, 18); 
+            
+            const frustumSize = 85; 
+            cameraOrtografica = new THREE.OrthographicCamera(
+                (frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, 
+                frustumSize / 2, frustumSize / -2, 0.1, 1000
+            );
+            cameraOrtografica.position.set(0, 5, 25); 
+
+            cameraAtiva = cameraOrtografica; 
+        }
+
+        function configurarLuzes() {
+            const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.2); 
+            scene.add(luzAmbiente);
+
+            const luzDirecional = new THREE.DirectionalLight(0xffffff, 1.2);
+            luzDirecional.position.set(0, 20, 10);
+            scene.add(luzDirecional);
+        }       
+
+        function criarNave() {
+            naveJogador = new THREE.Group();
+            naveJogador.position.set(0, -15, 0); 
+            scene.add(naveJogador);
+
+            const geometria = new THREE.BoxGeometry(1, 1, 1);
+            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 });
+            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 });
+            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 });
+            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x004444 });
+
+            const designNave = [
+                [0, 10, cA], [0, 9, cA], [0, 8, cA], [0, 7, cA], [0, 6, cB],
+                [-1, 8, cB], [1, 8, cB], [-1, 7, cB], [1, 7, cB], [-1, 6, cB], [1, 6, cB], [-2, 6, cB], [2, 6, cB],
+                [-3, 6, cCiano], [3, 6, cCiano], [-4, 6, cCiano], [4, 6, cCiano],
+                [-3, 5, cB], [3, 5, cB], [-4, 5, cB], [4, 5, cB],
+                [-5, 5, cCiano], [5, 5, cCiano], [-6, 5, cCiano], [6, 5, cCiano],
+                [-7, 4, cCiano], [7, 4, cCiano], [-8, 4, cCiano], [8, 4, cCiano],
+                [-7, 3, cB], [7, 3, cB], [-8, 3, cB], [8, 3, cB],
+                [-9, 3, cV], [9, 3, cV], [-10, 2, cV], [10, 2, cV],
+                [-2, 3, cV], [2, 3, cV], [-2, 2, cV], [2, 2, cV],
+                [-1, 1, cA], [1, 1, cA], [-1, 0, cV], [1, 0, cV],
+                [-2, 0, cA], [2, 0, cA], [-3, -1, cV], [3, -1, cV]
+            ];
+
+            designNave.forEach(bloco => {
+                const cubo = new THREE.Mesh(geometria, bloco[2]);
+                cubo.position.set(bloco[0], bloco[1], 0);
+                visualBlocos.add(cubo);
+            });
+            visualBlocos.scale.set(0.4, 0.4, 0.4);
+            naveJogador.add(visualBlocos);
+
+            const loader = new GLTFLoader();
+            loader.load('galaga_ship.glb', (gltf) => {
+                const modelo = gltf.scene;
+                modelo.scale.set(0.5, 0.5, 0.5); 
+                modelo.rotation.x = Math.PI / 2;
+                modelo.rotation.y = -Math.PI / 2; 
+                visual3D.add(modelo);
+            });
+            naveJogador.add(visual3D);
+
+            const luzPonto = new THREE.PointLight(0x0055ff, 5, 20);
+            luzPonto.position.set(0, -2, 0); 
+            naveJogador.add(luzPonto); 
+
+            const geoEscudo = new THREE.IcosahedronGeometry(3.5, 1);
+            const matEscudo = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.6 });
+            malhaEscudo = new THREE.Mesh(geoEscudo, matEscudo);
+            malhaEscudo.visible = false;
+            naveJogador.add(malhaEscudo);
+        }
+         function fabricarInimigo(tipoDaNave, valorPontos) {
+            const matriz = catalogoNaves[tipoDaNave];
+            if (!matriz) {
+                console.error("Design não encontrado para:", tipoDaNave);
+                return new THREE.Group();
+            }
+
+            const contentor = new THREE.Group();
+            const geometria = new THREE.BoxGeometry(1, 1, 1);
+
+            matriz.forEach(bloco => {
+                const cubo = new THREE.Mesh(geometria, bloco[2]);
+                cubo.position.set(bloco[0], bloco[1], 0);
+                contentor.add(cubo);
+            });
+
+            contentor.scale.set(0.35, 0.35, 0.35);
+
+            // CRIAR SETA DE RADAR
+            const matSeta = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00, 
+                transparent: true, 
+                opacity: 0 
+            });
+            const seta = new THREE.Mesh(geoSeta, matSeta);
+            seta.renderOrder = 999; // Garante que a seta aparece à frente de tudo
+            scene.add(seta);
+
+            contentor.userData = {
+                tipo: tipoDaNave,
+                pontos: valorPontos,
+                estado: 'ATACANDO',
+                vida: (tipoDaNave === 'Boss') ? 10 : (tipoDaNave === 'Tanque' ? 3 : 1)
+            };
+
+            return contentor;
+        }
+
+        function criarFrota() {
+            grupoFrota = new THREE.Group();
+
+            // --- 1. PALETA DE CORES ---
+            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 });
+            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 });
+            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 });
+            const cVerde = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
+            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x004444 });
+            const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x444400 });
+            const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x4400aa });
+            const cLaranja = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0x884400 });
+
+            // --- 2. OS DESIGNS (Matrizes) ---
+            const designKamikaze = [
+                [0, 3, cV], [-1, 2, cV], [1, 2, cV], [-2, 1, cAmarelo], [0, 1, cB], [2, 1, cAmarelo], 
+                [-1, 0, cAmarelo], [1, 0, cAmarelo], [-2, -1, cV], [2, -1, cV]
+            ];
+            const designCaca = [
+                [-2, 1, cCiano], [2, 1, cCiano], [-2, 0, cA], [-1, 0, cB], [0, 0, cA], [1, 0, cB], [2, 0, cA], 
+                [-2, -1, cCiano], [2, -1, cCiano]
+            ];
+            const designTanque = [
+                [-3, 2, cCiano], [-2, 2, cCiano], [-1, 2, cCiano], [0, 2, cCiano], [1, 2, cCiano], [2, 2, cCiano], [3, 2, cCiano],
+                [-2, 1, cVerde], [2, 1, cVerde], [-3, 0, cVerde], [-2, 0, cVerde], [-1, 0, cVerde], [0, 0, cV], [1, 0, cVerde], [2, 0, cVerde], [3, 0, cVerde], 
+                [-2, -1, cVerde], [2, -1, cVerde], [-3, -2, cB], [3, -2, cB]
+            ];
+            const designPortaAvioes = [
+                [-1, 2, cRoxo], [0, 2, cRoxo], [1, 2, cRoxo],
+                [-3, 1, cB], [-2, 1, cRoxo], [2, 1, cRoxo], [3, 1, cB],
+                [-5, 0, cB], [-4, 0, cRoxo], [-3, 0, cRoxo], [-2, 0, cRoxo], [-1, 0, cLaranja], [1, 0, cLaranja], [2, 0, cRoxo], [3, 0, cRoxo], [4, 0, cRoxo], [5, 0, cB],
+                [-6, -1, cB], [-5, -1, cB], [-4, -1, cB], [4, -1, cB], [5, -1, cB], [6, -1, cB],
+                [-2, -2, cLaranja], [2, -2, cLaranja]
+            ];
+            const designBoss = [
+                [-1, 3, cV], [1, 3, cV], [-2, 2, cV], [0, 2, cLaranja], [2, 2, cV],
+                [-4, 1, cRoxo], [-3, 1, cV], [-1, 1, cLaranja], [0, 1, cB], [1, 1, cLaranja], [3, 1, cV], [4, 1, cRoxo],
+                [-5, 0, cRoxo], [-4, 0, cRoxo], [-2, 0, cV], [-1, 0, cV], [1, 0, cV], [2, 0, cV], [4, 0, cRoxo], [5, 0, cRoxo],
+                [-5, -1, cRoxo], [-3, -1, cB], [-2, -1, cB], [2, -1, cB], [3, -1, cB], [5, -1, cRoxo],
+                [-6, -2, cV], [-4, -2, cV], [4, -2, cV], [6, -2, cV], [-6, -3, cV], [6, -3, cV]
+            ];
+
+            catalogoNaves.Kamikaze = designKamikaze;
+            catalogoNaves.Caca = designCaca;
+            catalogoNaves.Tanque = designTanque;
+            catalogoNaves.PortaAvioes = designPortaAvioes;
+            catalogoNaves.Boss = designBoss;
+
+            // --- 3. A GRELHA E A MATEMÁTICA ---
+            const colunas = 10;
+            const linhas = 5; 
+            const espacamentoX = 6.5; 
+            const espacamentoY = 4.5; 
+
+            for (let linha = 0; linha < linhas; linha++) {
+                for (let col = 0; col < colunas; col++) {
+                    let designEscolhido, pontosDestaNave, tipoDaNave;
+
+                    if (linha === 0) {
+                        designEscolhido = catalogoNaves.Boss; 
+                        pontosDestaNave = 400;
+                        tipoDaNave = 'Boss';
+                    } else if (linha === 1) {
+                        designEscolhido = catalogoNaves.PortaAvioes;
+                        pontosDestaNave = 200;
+                        tipoDaNave = 'PortaAvioes';
+                    } else if (linha === 2) {
+                        designEscolhido = catalogoNaves.Tanque;
+                        pontosDestaNave = 150;
+                        tipoDaNave = 'Tanque';
+                    } else if (linha === 3) {
+                        designEscolhido = catalogoNaves.Kamikaze;
+                        pontosDestaNave = 100;
+                        tipoDaNave = 'Kamikaze';
+                    } else {
+                        designEscolhido = catalogoNaves.Caca;
+                        pontosDestaNave = 50;
+                        tipoDaNave = 'Caca';
+                    }
+
+                    const inimigo = fabricarInimigo(designEscolhido, pontosDestaNave, tipoDaNave);
+
+                    // A FÓRMULA QUE ESPALHA AS NAVES NA HORIZONTAL:
+                    inimigo.position.x = (col * espacamentoX) - ((colunas - 1) * espacamentoX) / 2;
+                    inimigo.position.y = - (linha * espacamentoY);
+                    
+                    grupoFrota.add(inimigo);
+                    arrayInimigos.push(inimigo);
+                }
+            }
+
+            grupoFrota.position.set(0, 26, 0); 
+            scene.add(grupoFrota);
+        }
+
+        // --- SISTEMA DE COMBATE OTIMIZADO ---
+        function disparar() {
+            const angulo = naveJogador.rotation.z;
+            const dirX = -Math.sin(angulo);
+            const dirY = Math.cos(angulo);
+            const latX = Math.cos(angulo);
+            const latY = Math.sin(angulo);
+            
+            const velocidadeTiro = 1.2;
+            const envergadura = 1.4; 
+            const projecao = 2.5;    
+
+            // Usa as geometrias/materiais globais!
+            const laserEsq = new THREE.Mesh(geoLaserGlobal, matLaserGlobal);
+            laserEsq.position.x = naveJogador.position.x - (latX * envergadura) + (dirX * projecao);
+            laserEsq.position.y = naveJogador.position.y - (latY * envergadura) + (dirY * projecao);
+            laserEsq.rotation.z = angulo;
+            laserEsq.userData.velX = dirX * velocidadeTiro;
+            laserEsq.userData.velY = dirY * velocidadeTiro;
+            scene.add(laserEsq);
+            lasers.push(laserEsq);
+
+            const laserDir = new THREE.Mesh(geoLaserGlobal, matLaserGlobal);
+            laserDir.position.x = naveJogador.position.x + (latX * envergadura) + (dirX * projecao);
+            laserDir.position.y = naveJogador.position.y + (latY * envergadura) + (dirY * projecao);
+            laserDir.rotation.z = angulo;
+            laserDir.userData.velX = dirX * velocidadeTiro;
+            laserDir.userData.velY = dirY * velocidadeTiro;
+            scene.add(laserDir);
+            lasers.push(laserDir);
+        }
+
+        function criarExplosao(posicaoMundo) {
+            const grupoExplosao = new THREE.Group();
+            grupoExplosao.position.copy(posicaoMundo); 
+
+            for (let i = 0; i < 8; i++) {
+                // Usa materiais da Pool Global
+                const materialPartilhado = materiaisExplosaoGlobais[Math.floor(Math.random() * materiaisExplosaoGlobais.length)];
+                const fragmento = new THREE.Mesh(geoExplosaoGlobal, materialPartilhado);
+                
+                const angulo = (i / 8) * Math.PI * 2;
+                const velocidadeEstilhaco = 0.6;
+                fragmento.userData.velX = Math.cos(angulo) * velocidadeEstilhaco;
+                fragmento.userData.velY = Math.sin(angulo) * velocidadeEstilhaco;
+                
+                grupoExplosao.add(fragmento);
+            }
+
+            grupoExplosao.userData.tempoVida = 20; 
+            scene.add(grupoExplosao);
+            explosoes.push(grupoExplosao);
+        }
+
+        function gerirAtaques() {
+            const agora = Date.now();
+            if (agora - ultimoAtaqueInimigo > 2000) {
+                ultimoAtaqueInimigo = agora;
+                const navesNaFrota = arrayInimigos.filter(inimigo => inimigo.userData.estado === 'FROTA');
+                if (navesNaFrota.length > 0) {
+                    const kamikaze = navesNaFrota[Math.floor(Math.random() * navesNaFrota.length)];
+                    kamikaze.userData.estado = 'ATACANDO';
+                    scene.attach(kamikaze); 
+                    kamikaze.userData.tempoMergulho = 0;
+                    const direcaoAoJogador = naveJogador.position.x > kamikaze.position.x ? 1 : -1;
+                    kamikaze.userData.curvaX = direcaoAoJogador * 0.15; 
+                }
+            }
+        }
+
+        function gerirReforcos() {
+            if (jogoAcabou) return;
+
+            if (arrayInimigos.length < TETO_INIMIGOS) {
+                let tipo, pts;
+
+                // 1. Verificamos se ainda há naves de elite para mandar
+                if (filaElite.length > 0) {
+                    tipo = filaElite.shift(); // Tira a primeira nave da lista de elite
+                    pts = (tipo === 'Boss') ? 400 : (tipo === 'PortaAvioes' ? 200 : 100);
+                } else {
+                    // 2. Se a elite acabou, sorteia aleatoriamente como antes
+                    const sorteio = Math.random();
+                    if (sorteio > 0.9) { tipo = 'PortaAvioes'; pts = 200; }
+                    else if (sorteio > 0.7) { tipo = 'Tanque'; pts = 150; }
+                    else if (sorteio > 0.4) { tipo = 'Kamikaze'; pts = 100; }
+                    else { tipo = 'Caca'; pts = 50; }
+                }
+
+                const novoInimigo = fabricarInimigo(tipo, pts);
+
+                // --- LÓGICA DE MULTI-DIREÇÃO ---
+                const ladoSorteado = Math.floor(Math.random() * 3); // 0: Topo, 1: Esquerda, 2: Direita
+                
+                if (ladoSorteado === 0) {
+                    // Vem de cima (espalhado no X)
+                    novoInimigo.position.x = (Math.random() - 0.5) * 100;
+                    novoInimigo.position.y = naveJogador.position.y + 60;
+                } else if (ladoSorteado === 1) {
+                    // Vem da esquerda
+                    novoInimigo.position.x = -60;
+                    novoInimigo.position.y = naveJogador.position.y + (Math.random() * 40);
+                } else {
+                    // Vem da direita
+                    novoInimigo.position.x = 60;
+                    novoInimigo.position.y = naveJogador.position.y + (Math.random() * 40);
+                }
+
+                scene.add(novoInimigo);
+                arrayInimigos.push(novoInimigo);
+            }
+        }
+        function onKeyDown(event) {
+            if (jogoAcabou) {
+                if (event.code === 'Enter') location.reload();
+                return; // Bloqueio imediato
+            }
+
+            if (event.key === 'Control') {
+                cameraAtiva = (cameraAtiva === cameraPerspetiva) ? cameraOrtografica : cameraPerspetiva;
+            }
+            if (event.code === 'Tab') {
+                event.preventDefault(); 
+                hudVisivel = !hudVisivel; 
+                document.getElementById('hud').style.display = hudVisivel ? 'block' : 'none';
+            }
+
+            if (event.code === 'ArrowLeft') teclas.ArrowLeft = true;
+            if (event.code === 'ArrowRight') teclas.ArrowRight = true;
+            if (event.code === 'ArrowUp') teclas.ArrowUp = true;
+            if (event.code === 'ArrowDown') teclas.ArrowDown = true;
+            if (event.code === 'KeyZ') disparar();
+            if (event.code === 'KeyW') {
+                if (cargaEscudo >= 100 && !escudoAtivo) {
+                    escudoAtivo = true;
+                    malhaEscudo.visible = true;
+                    tempoFimEscudo = Date.now() + 5000;
+                }
+            }
+        }
+
+        function onKeyUp(event) {
+            if (jogoAcabou) return;
+            if (event.code === 'ArrowLeft') teclas.ArrowLeft = false;
+            if (event.code === 'ArrowRight') teclas.ArrowRight = false;
+            if (event.code === 'ArrowUp') teclas.ArrowUp = false;
+            if (event.code === 'ArrowDown') teclas.ArrowDown = false;
+        }
+
+        function onWindowResize() {
+            const aspeto = window.innerWidth / window.innerHeight;
+            cameraPerspetiva.aspect = aspeto;
+            cameraPerspetiva.updateProjectionMatrix();
+            const frustumSize = 85;
+            cameraOrtografica.left = - (frustumSize * aspeto) / 2;
+            cameraOrtografica.right = (frustumSize * aspeto) / 2;
+            cameraOrtografica.top = frustumSize / 2;
+            cameraOrtografica.bottom = - frustumSize / 2;
+            cameraOrtografica.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+     function criarTexturaEstrela() {
+            // Cria um ecrã de desenho invisível de 32x32 pixeis
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const contexto = canvas.getContext('2d');
+
+            // Desenha uma "bola" brilhante no centro que se desvanece nas bordas
+            const gradiente = contexto.createRadialGradient(16, 16, 0, 16, 16, 16);
+            gradiente.addColorStop(0, 'rgba(255, 255, 255, 1)');      // Centro branco e forte
+            gradiente.addColorStop(0.2, 'rgba(200, 220, 255, 0.8)');  // Ligeiramente azulado
+            gradiente.addColorStop(1, 'rgba(0, 0, 0, 0)');            // Borda transparente
+
+            contexto.fillStyle = gradiente;
+            contexto.fillRect(0, 0, 32, 32);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function criarFundo() {
+            const quantidadeEstrelas = 1500;
+            const geometria = new THREE.BufferGeometry(); 
+            const posicoes = new Float32Array(quantidadeEstrelas * 3); 
+            
+            for(let i = 0; i < quantidadeEstrelas * 3; i += 3) {
+                posicoes[i] = (Math.random() - 0.5) * 300;     
+                posicoes[i+1] = (Math.random() - 0.5) * 300;   
+                posicoes[i+2] = (Math.random() - 0.5) * 40 - 60; 
+            }
+            geometria.setAttribute('position', new THREE.BufferAttribute(posicoes, 3));
+            
+            // O NOVO MATERIAL MÁGICO
+            const material = new THREE.PointsMaterial({ 
+                color: 0xffffff, 
+                size: 1.5, // Aumentei um pouco o tamanho para se ver bem a bola
+                map: criarTexturaEstrela(), // Aplica a nossa bola brilhante
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending, // Faz com que o brilho se some (efeito néon)
+                depthWrite: false // Impede que o fundo preto da textura apague outras estrelas
+            });
+            
+            fundoEstrelas = new THREE.Points(geometria, material);
+            scene.add(fundoEstrelas);
+        }
+
+        // --- MOTOR PRINCIPAL OTIMIZADO ---
+       // --- MOTOR PRINCIPAL OTIMIZADO ---
+        function animate() {
+            // 1. FREEZE FRAME (Se morreste, pára imediatamente)
+            if (jogoAcabou) {
+                renderer.render(scene, cameraAtiva);
+                return; 
+            }
+
+            // 2. LOOP EXECUTADO APENAS 1 VEZ
+            requestAnimationFrame(animate);
+
+            const angulo = naveJogador.rotation.z; 
+            if (cameraAtiva === cameraPerspetiva) {
+                cameraPerspetiva.position.x = naveJogador.position.x + Math.sin(angulo) * 30;
+                cameraPerspetiva.position.y = naveJogador.position.y - Math.cos(angulo) * 30;
+                cameraPerspetiva.position.z = 20;
+                cameraPerspetiva.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+            } else {
+                cameraOrtografica.position.x = naveJogador.position.x;
+                cameraOrtografica.position.y = naveJogador.position.y;
+                cameraOrtografica.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
+            }
+            controls.target.copy(naveJogador.position);
+            controls.update();
+
+            const velocidadeRotacao = 0.05;
+            const velocidadeMovimento = 0.4;
+            if (teclas.ArrowLeft) naveJogador.rotation.z += velocidadeRotacao;
+            if (teclas.ArrowRight) naveJogador.rotation.z -= velocidadeRotacao;
+            if (teclas.ArrowUp) {
+                naveJogador.position.x -= Math.sin(naveJogador.rotation.z) * velocidadeMovimento;
+                naveJogador.position.y += Math.cos(naveJogador.rotation.z) * velocidadeMovimento;
+            }
+            if (teclas.ArrowDown) {
+                naveJogador.position.x += Math.sin(naveJogador.rotation.z) * (velocidadeMovimento / 2); 
+                naveJogador.position.y -= Math.cos(naveJogador.rotation.z) * (velocidadeMovimento / 2);
+            }
+
+            gerirAtaques();
+            gerirReforcos();
+            // --- MOVIMENTO DOS INIMIGOS (IA DE PERSEGUIÇÃO) ---
+            for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                let inim = arrayInimigos[j]; // <--- CORREÇÃO: Definir a variável
+                
+                if (inim && inim.userData.estado === 'ATACANDO') {
+                    // Movimento Y (Vêm de cima ou de baixo)
+                    if (inim.position.y > naveJogador.position.y) {
+                        inim.position.y -= 0.25;
+                    } else {
+                        inim.position.y += 0.25;
+                    }
+
+                    // Movimento X (Perseguição lateral)
+                    const diffX = naveJogador.position.x - inim.position.x;
+                    inim.position.x += diffX * 0.01; 
+                    inim.rotation.z = -diffX * 0.05;
+
+                    // --- INJEÇÃO 1: LÓGICA DA SETA (RADAR) ---
+                    let seta = inim.userData.setaGui;
+                    if (seta) {
+                        if (cameraAtiva === cameraPerspetiva) {
+                            const dirSeta = new THREE.Vector3().subVectors(inim.position, naveJogador.position);
+                            const dist = dirSeta.length();
+                            dirSeta.normalize();
+                            
+                            seta.position.copy(naveJogador.position).add(dirSeta.multiplyScalar(6));
+                            seta.rotation.z = Math.atan2(dirSeta.y, dirSeta.x) - Math.PI / 2;
+                            
+                            let alpha = 1.0 - (dist / 120);
+                            seta.material.opacity = THREE.MathUtils.clamp(alpha, 0.0, 0.8);
+                            seta.visible = true;
+                        } else {
+                            seta.visible = false;
+                        }
+                    }
+
+                    // Se a nave se afastar demais, remove para poupar memória
+                    if (Math.abs(inim.position.y - naveJogador.position.y) > 80) {
+                        scene.remove(inim);
+                        // Limpar Seta da RAM
+                        if (inim.userData.setaGui) {
+                            scene.remove(inim.userData.setaGui);
+                            inim.userData.setaGui.material.dispose();
+                            inim.userData.setaGui.geometry.dispose();
+                        }
+                        arrayInimigos.splice(j, 1);
+                    }
+                }
+            }
+           
+            if (grupoFrota) {
+                const tempo = Date.now() * 0.001; 
+                grupoFrota.position.x = Math.sin(tempo) * 4; 
+                grupoFrota.position.y = 26 + Math.cos(tempo * 2) * 0.5; 
+            }
+
+            // OTIMIZAÇÃO: distanceToSquared usa 10x menos processamento! (3.0^2 = 9.0)
+            if (!invulneravel) {
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inimigo = arrayInimigos[j];
+                    inimigo.getWorldPosition(vetorMundoInimigo);
+
+                    if (naveJogador.position.distanceToSquared(vetorMundoInimigo) < 9.0) {
+                        if (escudoAtivo) {
+                            criarExplosao(vetorMundoInimigo);
+                            pontos += inimigo.userData.pontos;
+                            inimigo.parent.remove(inimigo);
+                            
+                            // --- INJEÇÃO 2: LIMPAR SETA NA COLISÃO COM ESCUDO ---
+                            if (inimigo.userData.setaGui) {
+                                scene.remove(inimigo.userData.setaGui);
+                                inimigo.userData.setaGui.material.dispose();
+                                inimigo.userData.setaGui.geometry.dispose();
+                            }
+                            
+                            arrayInimigos.splice(j, 1);
+                            atualizarHUD();
+                        } else {
+                            vidas--;          
+                            atualizarHUD();   
+                            criarExplosao(vetorMundoInimigo);
+                            inimigo.parent.remove(inimigo);
+                            
+                            // --- INJEÇÃO 3: LIMPAR SETA NA COLISÃO COM JOGADOR ---
+                            if (inimigo.userData.setaGui) {
+                                scene.remove(inimigo.userData.setaGui);
+                                inimigo.userData.setaGui.material.dispose();
+                                inimigo.userData.setaGui.geometry.dispose();
+                            }
+                            
+                            arrayInimigos.splice(j, 1);
+
+                           if (vidas <= 0) {
+                                document.getElementById('vidas').innerText = "0"; 
+                                document.getElementById('pontuacao-final').innerText = pontos;
+                                document.getElementById('ecra-gameover').style.display = 'flex';
+                                jogoAcabou = true;
+                            } else {
+                                invulneravel = true;
+                                tempoInvulneravel = Date.now();
+                            }
+                        }
+                        break; 
+                    }
+                }
+            }
+
+            // OTIMIZAÇÃO: 
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let laser = lasers[i];
+                laser.position.x += laser.userData.velX; 
+                laser.position.y += laser.userData.velY;
+                
+                let destruido = false; 
+                for (let j = arrayInimigos.length - 1; j >= 0; j--) {
+                    let inim = arrayInimigos[j];
+                    inim.getWorldPosition(vecInim);
+                    
+                    if (laser.position.distanceToSquared(vecInim) < 6.25) {
+                        criarExplosao(vecInim);
+                        inim.parent.remove(inim); 
+                        
+                        // --- INJEÇÃO 4: LIMPAR SETA QUANDO INIMIGO LEVA TIRO ---
+                        if (inim.userData.setaGui) {
+                            scene.remove(inim.userData.setaGui);
+                            inim.userData.setaGui.material.dispose();
+                            inim.userData.setaGui.geometry.dispose();
+                        }
+                        
+                        arrayInimigos.splice(j, 1);
+                        pontos += inim.userData.pontos; atualizarHUD();
+                        
+                        // NÃO APAGA GEOMETRIAS AQUI PORQUE SÃO GLOBAIS! APENAS REMOVE.
+                        scene.remove(laser); lasers.splice(i, 1);
+                        destruido = true; 
+                        break;
+                    }
+                }
+
+                if (!destruido) {
+                    const distX = Math.abs(laser.position.x - naveJogador.position.x);
+                    const distY = Math.abs(laser.position.y - naveJogador.position.y);
+                    if (distX > 60 || distY > 60) {
+                        scene.remove(laser); 
+                        lasers.splice(i, 1);
+                    }
+                }
+            }
+            
+            for (let i = explosoes.length - 1; i >= 0; i--) {
+                let exp = explosoes[i];
+                exp.children.forEach(fragmento => {
+                    fragmento.position.x += fragmento.userData.velX;
+                    fragmento.position.y += fragmento.userData.velY;
+                    fragmento.scale.multiplyScalar(0.85); 
+                });
+                exp.userData.tempoVida--;
+
+                if (exp.userData.tempoVida <= 0) {
+                    // NÃO FAZEMOS DISPOSE PORQUE OS MATERIAIS SÃO GLOBAIS
+                    scene.remove(exp);
+                    explosoes.splice(i, 1);
+                }
+            }
+            
+            if (invulneravel) {
+                const agora = Date.now();
+                naveJogador.visible = Math.floor(agora / 100) % 2 === 0;
+                if (agora - tempoInvulneravel > 2000) {
+                    invulneravel = false;
+                    naveJogador.visible = true; 
+                }
+            }
+
+            if (cameraAtiva === cameraPerspetiva) {
+                visualBlocos.visible = false;
+                visual3D.visible = true;
+            } else {
+                visualBlocos.visible = true;
+                visual3D.visible = false;
+            }
+
+            const modo3DAtivo = (cameraAtiva === cameraPerspetiva);
+            arrayInimigos.forEach(inimigo => {
+                if (inimigo.userData.visualBlocos && inimigo.userData.visual3D) {
+                    inimigo.userData.visualBlocos.visible = !modo3DAtivo;
+                    inimigo.userData.visual3D.visible = modo3DAtivo;
+                }
+            });
+
+            const agora = Date.now();
+
+            if (teclas.ArrowUp) {
+                // USA O MATERIAL GLOBAL! (Poupança Absurda de RAM)
+                const particula = new THREE.Mesh(geoRastoGlobal, matRastoGlobal);
+                const recuo = 2.0; 
+                particula.position.x = naveJogador.position.x + Math.sin(naveJogador.rotation.z) * recuo;
+                particula.position.y = naveJogador.position.y - Math.cos(naveJogador.rotation.z) * recuo;
+                scene.add(particula);
+                particulasRasto.push({ malha: particula, tempoVida: 1.0 });
+            }
+
+            for (let i = particulasRasto.length - 1; i >= 0; i--) {
+                let p = particulasRasto[i];
+                p.malha.position.y -= 0.2; 
+                p.malha.scale.multiplyScalar(0.85); // Usa escala em vez de opacidade
+                p.tempoVida -= 0.05; 
+                
+                if (p.tempoVida <= 0) {
+                    scene.remove(p.malha);
+                    particulasRasto.splice(i, 1);
+                }
+            }
+
+            if (escudoAtivo) {
+                malhaEscudo.rotation.x += 0.05; malhaEscudo.rotation.y += 0.05; malhaEscudo.rotation.z += 0.02;
+                if (agora > tempoFimEscudo) {
+                    escudoAtivo = false; malhaEscudo.visible = false; cargaEscudo = 0; 
+                }
+            } else {
+                if (cargaEscudo < 100) {
+                    cargaEscudo += (agora - ultimaAtualizacaoEscudo) * (100 / 60000); 
+                    if (cargaEscudo > 100) cargaEscudo = 100;
+                }
+            }
+            ultimaAtualizacaoEscudo = agora;
+
+            if (hudVisivel) {
+                const elementoBarra = document.getElementById('barra-escudo');
+                elementoBarra.style.width = Math.floor(cargaEscudo) + '%';
+                elementoBarra.style.backgroundColor = cargaEscudo >= 100 ? '#00ffff' : '#ffaa00';
+            }
+
+            if (fundoEstrelas) {
+                const posicoes = fundoEstrelas.geometry.attributes.position.array;
+                for(let i = 0; i < posicoes.length; i += 3) { 
+                    posicoes[i+1] -= 0.5; 
+                    if (teclas.ArrowUp) posicoes[i+1] -= 1.0; 
+                    if (posicoes[i+1] < -150) posicoes[i+1] = 150;
+                }
+                fundoEstrelas.geometry.attributes.position.needsUpdate = true; 
+            }
+            
+            renderer.render(scene, cameraAtiva);
+        }
+    </script>
+</body>
+</html>
