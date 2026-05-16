@@ -171,10 +171,6 @@
             requestAnimationFrame(loop);
         })();
 
-<<<<<<< HEAD
-=======
-        // Sliders
->>>>>>> 82c8f1d8bc8b09b0269b42111821520466efd2f4
         const slSfx = document.getElementById('sl-sfx'), vlSfx = document.getElementById('vl-sfx');
         slSfx.addEventListener('input', () => vlSfx.textContent = slSfx.value+'%');
         const slMus = document.getElementById('sl-musica'), vlMus = document.getElementById('vl-musica');
@@ -182,10 +178,7 @@
         document.getElementById('tog-som').addEventListener('change', function() { slSfx.disabled=!this.checked; slSfx.style.opacity=this.checked?'1':'0.3'; });
         document.getElementById('tog-musica').addEventListener('change', function() { slMus.disabled=!this.checked; slMus.style.opacity=this.checked?'1':'0.3'; });
 
-<<<<<<< HEAD
-=======
-        // Botão Jogar
->>>>>>> 82c8f1d8bc8b09b0269b42111821520466efd2f4
+
         document.getElementById('btn-jogar').addEventListener('click', () => {
             window.configSom = {
                 somAtivo:     document.getElementById('tog-som').checked,
@@ -195,11 +188,7 @@
             };
             document.getElementById('menu').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
-<<<<<<< HEAD
 
-            window.jogoIniciado = true;
-=======
->>>>>>> 82c8f1d8bc8b09b0269b42111821520466efd2f4
         });
     })();
     </script>
