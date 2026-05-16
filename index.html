@@ -2,46 +2,69 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Galaga 3D - Ultimate Edition (Luzes e Fundo Infinito)</title>
+    <title>Galaga 3D - Ultimate Revolution</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
+        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; }
         canvas { display: block; }
         
+        /* ===== HUD ===== */
         #hud {
-            position: absolute; top: 0; left: 0; width: 100%;
+            position: absolute; top: 50px; left: 0; width: 100%;
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold; text-align: center;
             display: none; pointer-events: none; z-index: 10;
         }
         .hud-container { display: flex; justify-content: space-around; padding-top: 20px; }
-        .titulo { color: red; font-size: 24px; }
+        .titulo { color: red; font-size: 24px; text-shadow: 0 0 10px rgba(255,0,0,0.5); }
         .valor { color: white; font-size: 24px; }
         .barra-container {
             width: 150px; height: 15px; background-color: #333; 
             border: 2px solid white; margin: 5px auto 0 auto;
         }
-        #barra-escudo { width: 100%; height: 100%; background-color: #00ffff; transition: width 0.1s; }
-        #barra-onda { width: 100%; height: 100%; background-color: #ff00ff; transition: width 0.1s; }
+        #barra-escudo { width: 100%; height: 100%; background-color: #00ffff; }
+        #barra-onda { width: 100%; height: 100%; background-color: #ff00ff; }
+        #barra-dash { width: 100%; height: 100%; background-color: #ffff00; }
         
         #ecra-gameover {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             background-color: rgba(0, 0, 0, 0.85); display: none; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; /* ALTERAÇÃO: Centraliza verticalmente o conteúdo */
-            font-family: 'Courier New', Courier, monospace; 
-            z-index: 999999; pointer-events: auto;
+            flex-direction: column; align-items: center; justify-content: center; 
+            font-family: 'Courier New', Courier, monospace; z-index: 999999;
         }
         #texto-pontuacao { color: white; font-size: 40px; font-weight: bold; margin: 0; }
         #texto-gameover { 
-            color: #ff0000; font-size: 180px; 
-            margin: 20px 0; /* ALTERAÇÃO: Margem fixa em vez de 'auto' */
+            color: #ff0000; font-size: 140px; margin: 20px 0; 
             text-shadow: 0 0 30px #ff0000; letter-spacing: 15px; 
         }
         .piscar { animation: blink 1s infinite; color: #ffff00 !important; font-size: 35px; margin-top: 30px; }
         @keyframes blink { 50% { opacity: 0; } }
 
-        /* ===== MENU ===== */
+        /* ===== MENUS DE CANTO EXTERNOS ===== */
+        .canto-topo-esq { position: absolute; top: 20px; left: 20px; z-index: 300; display: flex; gap: 10px; }
+        .canto-topo-dir { position: absolute; top: 20px; right: 20px; z-index: 300; display: flex; gap: 15px; }
+        
+        .btn-persp {
+            background: rgba(0,0,0,0.6); border: 2px solid #555; color: #aaa;
+            padding: 8px 16px; font-family: monospace; font-weight: bold; cursor: pointer;
+            border-radius: 4px; transition: all 0.2s;
+        }
+        .btn-persp.ativo {
+            border-color: #00ffff; color: #00ffff;
+            box-shadow: 0 0 15px #00ffff, inset 0 0 5px #00ffff;
+        }
+
+        .icone-input {
+            background: rgba(20,20,40,0.8); border: 1px solid #444; color: #555;
+            padding: 8px 12px; font-family: monospace; font-size: 12px; border-radius: 4px;
+            font-weight: bold; display: flex; align-items: center; gap: 6px;
+            cursor: pointer;
+        }
+        .icone-input.ativo {
+            border-color: #00ff00; color: #00ff00;
+            box-shadow: 0 0 10px rgba(0,255,0,0.4);
+        }
+
+        /* ===== MENU PRINCIPAL ===== */
         #menu {
             position: absolute; inset: 0;
             display: flex; flex-direction: column;
@@ -50,34 +73,67 @@
         }
         #menu-canvas { position: absolute; inset: 0; z-index: 0; }
         .menu-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+        
         .logo-galaga {
             font-size: clamp(48px, 10vw, 96px); font-weight: bold;
             letter-spacing: 12px; color: #fff;
             text-shadow: 0 0 10px #fff, 0 0 30px #f0f, 0 0 60px #f0f;
             animation: pulso 2s ease-in-out infinite; margin-bottom: 8px;
         }
-        .logo-sub { font-size: clamp(12px,2vw,18px); color: #ff0; letter-spacing: 6px; margin-bottom: 50px; animation: pisca 1.2s step-end infinite; }
-        @keyframes pulso { 0%,100%{text-shadow:0 0 10px #fff,0 0 30px #f0f,0 0 60px #f0f} 50%{text-shadow:0 0 20px #fff,0 0 50px #f0f,0 0 100px #f0f} }
-        @keyframes pisca-btn { 0%,100%{opacity:1} 50%{opacity:0.5} }
-        .painel { background: rgba(0,0,30,0.85); border: 1px solid rgba(100,100,255,0.4); border-radius: 12px; padding: 28px 40px; min-width: 380px; margin-bottom: 32px; }
-        .painel-titulo { color: #88aaff; font-size: 11px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 20px; text-align: center; }
-        .def-linha { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-        .def-linha:last-child { margin-bottom: 0; }
-        .def-label { color: #aaa; font-size: 13px; letter-spacing: 1px; min-width: 110px; }
-        .def-ctrl { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end; }
+        .logo-sub { font-size: clamp(12px,2vw,18px); color: #ff0; letter-spacing: 6px; margin-bottom: 50px; }
+        
+        .stack-botoes { display: flex; flex-direction: column; gap: 16px; min-width: 280px; }
+        
+        .btn-universal {
+            background: rgba(10, 10, 30, 0.8); border: 2px solid #4466ff; color: #4466ff;
+            font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold;
+            letter-spacing: 4px; padding: 14px; border-radius: 6px; cursor: pointer;
+            text-transform: uppercase; transition: all 0.2s; text-align: center;
+        }
+        .btn-universal:hover {
+            background: #4466ff; color: #000;
+            box-shadow: 0 0 20px #4466ff; transform: scale(1.03);
+        }
+        #btn-jogar { border-color: #ff0; color: #ff0; }
+        #btn-jogar:hover { background: #ff0; color: #000; box-shadow: 0 0 20px #ff0; }
+        #btn-quit { border-color: #ff3333; color: #ff3333; }
+        #btn-quit:hover { background: #ff3333; color: #000; box-shadow: 0 0 20px #ff3333; }
+
+        /* ===== PAINEL DE DEFINIÇÕES SUB-MENU ===== */
+        #painel-definicoes {
+            background: rgba(5, 5, 25, 0.95); border: 2px solid #4466ff;
+            border-radius: 12px; padding: 24px; width: 550px; display: none;
+            flex-direction: column; box-shadow: 0 0 30px rgba(68,102,255,0.3);
+        }
+        .abas-titulos { display: flex; border-bottom: 2px solid #2244aa; margin-bottom: 20px; }
+        .aba-link {
+            flex: 1; padding: 10px; text-align: center; color: #88aaff;
+            font-family: monospace; font-weight: bold; cursor: pointer; transition: all 0.2s;
+        }
+        .aba-link.ativa {
+            color: #fff; background: #2244aa; border-radius: 6px 6px 0 0;
+            text-shadow: 0 0 8px #fff;
+        }
+        .aba-conteudo { display: none; min-height: 220px; color: #ccc; font-family: monospace; }
+        .aba-conteudo.ativa { display: block; }
+
+        /* Estilos Internos das Abas */
+        .linha-controlo { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #112255; }
+        .btn-captura { background: #222; border: 1px solid #555; color: #fff; padding: 4px 10px; border-radius: 4px; cursor: pointer; min-width: 120px; text-align: center; }
+        .btn-captura.escutando { border-color: #ff0; color: #ff0; box-shadow: 0 0 8px #ff0; }
+        
+        .btn-lang { background: #222; border: 1px solid #444; color: #aaa; padding: 12px 24px; font-weight: bold; cursor: pointer; border-radius: 6px; }
+        .btn-lang.ativo { border-color: #ff0; color: #ff0; box-shadow: 0 0 10px rgba(255,255,0,0.3); }
+
+        .def-linha { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
         .toggle { position: relative; width: 44px; height: 22px; cursor: pointer; }
         .toggle input { display: none; }
-        .toggle-pista { position: absolute; inset: 0; background: #222; border: 1px solid #444; border-radius: 11px; transition: background .2s; }
-        .toggle input:checked ~ .toggle-pista { background: #4466ff; border-color: #4466ff; }
-        .toggle-bolinha { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #666; border-radius: 50%; transition: transform .2s, background .2s; }
+        .toggle-pista { position: absolute; inset: 0; background: #222; border: 1px solid #444; border-radius: 11px; }
+        .toggle input:checked ~ .toggle-pista { background: #4466ff; }
+        .toggle-bolinha { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #666; border-radius: 50%; transition: transform .2s; }
         .toggle input:checked ~ .toggle-bolinha { transform: translateX(22px); background: #fff; }
-        .vol-slider { -webkit-appearance: none; appearance: none; width: 130px; height: 4px; background: #333; border-radius: 2px; outline: none; cursor: pointer; }
+        .vol-slider { -webkit-appearance: none; appearance: none; width: 150px; height: 4px; background: #333; border-radius: 2px; outline: none; }
         .vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #4466ff; cursor: pointer; }
-        .vol-slider:hover::-webkit-slider-thumb { background: #88aaff; }
-        .vol-val { color: #88aaff; font-size: 12px; min-width: 32px; text-align: right; }
-        .btn-jogar { background: transparent; border: 2px solid #ff0; color: #ff0; font-family: 'Courier New', monospace; font-size: clamp(16px,3vw,22px); font-weight: bold; letter-spacing: 6px; padding: 14px 48px; border-radius: 4px; cursor: pointer; text-transform: uppercase; transition: all .15s; animation: pisca-btn 1.8s ease-in-out infinite; }
-        .btn-jogar:hover { background: #ff0; color: #000; animation: none; transform: scale(1.04); }
-        .menu-rodape { position: absolute; bottom: 24px; color: #333; font-size: 11px; letter-spacing: 2px; }
     </style>
     <script type="importmap">
       {
@@ -89,108 +145,222 @@
     </script>
 </head>
 <body>
+    <div class="canto-topo-esq">
+        <button class="btn-persp" id="bt-2d">2D</button>
+        <button class="btn-persp ativo" id="bt-3d">3D</button>
+    </div>
+    <div class="canto-topo-dir">
+        <div class="icone-input ativo" id="icon-teclado">⌨ <span data-i18n="ui.teclado">TECLADO</span></div>
+        <div class="icone-input" id="icon-comando">🎮 <span data-i18n="ui.comando">COMANDO</span></div>
+    </div>
+
     <div id="menu">
         <canvas id="menu-canvas"></canvas>
         <div class="menu-content">
             <div class="logo-galaga">GALAGA</div>
             <div class="logo-sub">3D · Ultimate Edition</div>
-            <div class="painel">
-                <div class="painel-titulo">— Definições —</div>
-                <div class="def-linha">
-                    <span class="def-label">Som</span>
-                    <div class="def-ctrl">
+            
+            <div class="stack-botoes" id="menu-botoes-raiz">
+                <button class="btn-universal" id="btn-jogar" data-i18n="menu.jogar">▶ Jogar</button>
+                <button class="btn-universal" id="btn-definicoes" data-i18n="menu.definicoes">⚙ Definições</button>
+                <button class="btn-universal" id="btn-quit" data-i18n="menu.sair">❌ Sair</button>
+            </div>
+
+            <div id="painel-definicoes">
+                <div class="abas-titulos">
+                    <div class="aba-link ativa" data-tab="tab-controlos" data-i18n="tabs.controlos">Controlos</div>
+                    <div class="aba-link" data-tab="tab-idioma" data-i18n="tabs.idioma">Idioma</div>
+                    <div class="aba-link" data-tab="tab-audio" data-i18n="tabs.audio">Áudio</div>
+                </div>
+
+                <div class="aba-conteudo ativa" id="tab-controlos">
+                    <div id="lista-mapeamento"></div>
+                </div>
+
+                <div class="aba-conteudo" id="tab-idioma">
+                    <div style="display:flex; justify-content:center; gap:20px; padding-top:40px;">
+                        <button class="btn-lang ativo" id="lang-pt">Português</button>
+                        <button class="btn-lang" id="lang-en">English</button>
+                    </div>
+                </div>
+
+                <div class="aba-conteudo" id="tab-audio">
+                    <div class="def-linha">
+                        <span data-i18n="audio.som">Efeitos de Som</span>
                         <label class="toggle"><input type="checkbox" id="tog-som" checked><span class="toggle-pista"></span><span class="toggle-bolinha"></span></label>
                     </div>
-                </div>
-                <div class="def-linha">
-                    <span class="def-label">Volume SFX</span>
-                    <div class="def-ctrl">
-                        <input type="range" class="vol-slider" id="sl-sfx" min="0" max="100" value="70">
-                        <span class="vol-val" id="vl-sfx">70%</span>
+                    <div class="def-linha">
+                        <span data-i18n="audio.volsfx">Volume SFX</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="range" class="vol-slider" id="sl-sfx" min="0" max="100" value="70">
+                            <span id="vl-sfx">70%</span>
+                        </div>
                     </div>
-                </div>
-                <div class="def-linha">
-                    <span class="def-label">Música</span>
-                    <div class="def-ctrl">
+                    <div class="def-linha">
+                        <span data-i18n="audio.musica">Música de Fundo</span>
                         <label class="toggle"><input type="checkbox" id="tog-musica" checked><span class="toggle-pista"></span><span class="toggle-bolinha"></span></label>
                     </div>
-                </div>
-                <div class="def-linha">
-                    <span class="def-label">Vol. Música</span>
-                    <div class="def-ctrl">
-                        <input type="range" class="vol-slider" id="sl-musica" min="0" max="100" value="50">
-                        <span class="vol-val" id="vl-musica">50%</span>
+                    <div class="def-linha">
+                        <span data-i18n="audio.volmus">Vol. Música</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="range" class="vol-slider" id="sl-musica" min="0" max="100" value="50">
+                            <span id="vl-musica">50%</span>
+                        </div>
                     </div>
                 </div>
+
+                <button class="btn-universal" id="btn-voltar-menu" style="margin-top:20px; font-size:14px; padding:8px; border-color:#88aaff; color:#88aaff;" data-i18n="menu.voltar">Voltar</button>
             </div>
-            <button class="btn-jogar" id="btn-jogar">▶  JOGAR</button>
         </div>
-        <div class="menu-rodape">SETAS: MOVER &nbsp;|&nbsp; Z: DISPARAR &nbsp;|&nbsp; W: ESCUDO &nbsp;|&nbsp; SPACE: ONDA &nbsp;|&nbsp; CTRL: CÂMARA &nbsp;|&nbsp; TAB: HUD</div>
     </div>
+    
     <div id="hud">
         <div class="hud-container">
-            <div><div class="titulo">1UP</div><div id="pontuacao" class="valor">0</div></div>
-            <div><div class="titulo">HIGH SCORE</div><div id="highscore" class="valor">0</div></div>
-            <div><div class="titulo">VIDAS</div><div id="vidas" class="valor">3</div></div>
+            <div><div class="titulo" data-i18n="hud.wave">WAVE</div><div id="wavenumero" class="valor">1</div></div>
+            <div><div class="titulo" data-i18n="hud.pontos">1UP</div><div id="pontuacao" class="valor">0</div></div>
+            <div><div class="titulo" data-i18n="hud.recorde">HIGH SCORE</div><div id="highscore" class="valor">0</div></div>
+            <div><div class="titulo" data-i18n="hud.vidas">VIDAS</div><div id="vidas" class="valor">3</div></div>
             <div>
-                <div class="titulo">ESCUDO (W)</div>
+                <div class="titulo"><span data-i18n="hud.escudo">ESCUDO</span> (<span id="txt-key-escudo">C</span>)</div>
                 <div class="barra-container"><div id="barra-escudo"></div></div>
             </div>
             <div>
-                <div class="titulo">ONDA (SPACE)</div>
+                <div class="titulo"><span data-i18n="hud.onda">ONDA</span> (<span id="txt-key-onda">X</span>)</div>
                 <div class="barra-container"><div id="barra-onda"></div></div>
+            </div>
+            <div>
+                <div class="titulo"><span data-i18n="hud.dash">DASH</span> (<span id="txt-key-dash">SPACE</span>)</div>
+                <div class="barra-container"><div id="barra-dash"></div></div>
             </div>
         </div>
     </div>
 
     <div id="ecra-gameover">
-        <p id="texto-pontuacao">PONTUAÇÃO: <span id="pontuacao-final">0</span></p>
-        <p class="piscar">INSERT COIN (Pressiona ENTER)</p>
+        <p id="texto-pontuacao"><span data-i18n="go.pontos">PONTUAÇÃO</span>: <span id="pontuacao-final">0</span></p>
+        <p class="piscar" data-i18n="go.recomecar">INSERT COIN (Pressiona ENTER)</p>
         <h1 id="texto-gameover">GAME OVER</h1>
     </div>
 
     <script>
-    (function () {
-        // Estrelas animadas
-        const canvas = document.getElementById('menu-canvas');
-        const ctx = canvas.getContext('2d');
-        const estrelas = [];
-        function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
-        resize(); window.addEventListener('resize', resize);
-        for (let i = 0; i < 220; i++) estrelas.push({ x: Math.random()*innerWidth, y: Math.random()*innerHeight, r: Math.random()*1.5+0.3, vel: Math.random()*0.4+0.1, b: Math.random() });
-        (function loop() {
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            const t = Date.now()*0.001;
-            estrelas.forEach(e => {
-                e.y += e.vel;
-                if (e.y > canvas.height) { e.y = 0; e.x = Math.random()*canvas.width; }
-                const a = 0.4 + 0.6*Math.abs(Math.sin(t*1.5+e.b*10));
-                ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
-                ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
-            });
-            requestAnimationFrame(loop);
-        })();
+    const dicionario = {
+        pt: {
+            "menu.jogar": "▶ Jogar", "menu.continuar": "▶ Continuar", "menu.definicoes": "⚙ Definições", "menu.sair": "❌ Sair", "menu.voltar": "Voltar",
+            "tabs.controlos": "Controlos", "tabs.idioma": "Idioma", "tabs.audio": "Áudio",
+            "audio.som": "Efeitos de Som", "audio.volsfx": "Volume SFX", "audio.musica": "Música de Fundo", "audio.volmus": "Vol. Música",
+            "hud.wave": "WAVE", "hud.pontos": "1UP", "hud.recorde": "HIGH SCORE", "hud.vidas": "VIDAS", "hud.escudo": "ESCUDO", "hud.onda": "ONDA", "hud.dash": "DASH",
+            "go.pontos": "PONTUAÇÃO", "go.recomecar": "INSERT COIN (Pressiona ENTER)",
+            "ctrl.ArrowLeft": "Mover Esquerda", "ctrl.ArrowRight": "Mover Direita", "ctrl.ArrowUp": "Acelerar", "ctrl.ArrowDown": "Travar",
+            "ctrl.KeyZ": "Disparar", "ctrl.KeyC": "Escudo", "ctrl.KeyX": "Onda Choque", "ctrl.Space": "Dash", "ui.teclado": "TECLADO", "ui.comando": "COMANDO"
+        },
+        en: {
+            "menu.jogar": "▶ Play", "menu.continuar": "▶ Continue", "menu.definicoes": "⚙ Settings", "menu.sair": "❌ Quit", "menu.voltar": "Back",
+            "tabs.controlos": "Controls", "tabs.idioma": "Language", "tabs.audio": "Audio",
+            "audio.som": "Sound Effects", "audio.volsfx": "SFX Volume", "audio.musica": "Background Music", "audio.volmus": "Music Vol",
+            "hud.wave": "WAVE", "hud.pontos": "1UP", "hud.recorde": "HIGH SCORE", "hud.vidas": "LIVES", "hud.escudo": "SHIELD", "hud.onda": "SHOCKWAVE", "hud.dash": "DASH",
+            "go.pontos": "SCORE", "go.recomecar": "INSERT COIN (Press ENTER)",
+            "ctrl.ArrowLeft": "Move Left", "ctrl.ArrowRight": "Move Right", "ctrl.ArrowUp": "Thrust", "ctrl.ArrowDown": "Brake",
+            "ctrl.KeyZ": "Shoot", "ctrl.KeyC": "Shield", "ctrl.KeyX": "Shockwave", "ctrl.Space": "Dash", "ui.teclado": "KEYBOARD", "ui.comando": "GAMEPAD"
+        }
+    };
+    window.idiomaAtual = 'pt';
 
-        const slSfx = document.getElementById('sl-sfx'), vlSfx = document.getElementById('vl-sfx');
-        slSfx.addEventListener('input', () => vlSfx.textContent = slSfx.value+'%');
-        const slMus = document.getElementById('sl-musica'), vlMus = document.getElementById('vl-musica');
-        slMus.addEventListener('input', () => vlMus.textContent = slMus.value+'%');
-        document.getElementById('tog-som').addEventListener('change', function() { slSfx.disabled=!this.checked; slSfx.style.opacity=this.checked?'1':'0.3'; });
-        document.getElementById('tog-musica').addEventListener('change', function() { slMus.disabled=!this.checked; slMus.style.opacity=this.checked?'1':'0.3'; });
-
-
-        document.getElementById('btn-jogar').addEventListener('click', () => {
-            window.configSom = {
-                somAtivo:     document.getElementById('tog-som').checked,
-                volumeSfx:    parseInt(slSfx.value)/100,
-                musicaAtiva:  document.getElementById('tog-musica').checked,
-                volumeMusica: parseInt(slMus.value)/100
-            };
-            document.getElementById('menu').style.display = 'none';
-            document.getElementById('hud').style.display = 'block';
-
+    function aplicarTraducoes() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const chave = el.getAttribute('data-i18n');
+            if(dicionario[window.idiomaAtual][chave]) {
+                if (el.id === 'btn-jogar' && window.jogoPausado) {
+                    el.textContent = dicionario[window.idiomaAtual]["menu.continuar"];
+                } else {
+                    el.textContent = dicionario[window.idiomaAtual][chave];
+                }
+            }
         });
+        construirListaControlos();
+    }
+
+    window.mapeamentoTeclas = {
+        ArrowLeft: "Esquerda", ArrowRight: "Direita", ArrowUp: "Avançar", ArrowDown: "Recuar",
+        KeyZ: "Disparar", KeyC: "Escudo", KeyX: "Onda", Space: "Dash"
+    };
+
+    function construirListaControlos() {
+        const lista = document.getElementById('lista-mapeamento');
+        lista.innerHTML = '';
+        Object.keys(window.mapeamentoTeclas).forEach(teclaOriginal => {
+            const funcao = window.mapeamentoTeclas[teclaOriginal];
+            const nomeTraduzido = dicionario[window.idiomaAtual][`ctrl.${teclaOriginal}`] || funcao;
+            
+            const linha = document.createElement('div');
+            linha.className = 'linha-controlo';
+            linha.innerHTML = `<span>${nomeTraduzido}</span><button class="btn-captura" data-funcao="${funcao}">${teclaOriginal}</button>`;
+            lista.appendChild(linha);
+        });
+
+        document.querySelectorAll('.btn-captura').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.btn-captura').forEach(b => b.classList.remove('escutando'));
+                this.classList.add('escutando');
+                this.textContent = window.idiomaAtual === 'pt' ? 'Prima uma tecla...' : 'Press a key...';
+                window.funcaoEmCaptura = this.getAttribute('data-funcao');
+                window.botaoEmCaptura = this;
+            });
+        });
+    }
+
+    const canvas = document.getElementById('menu-canvas');
+    const ctx = canvas.getContext('2d');
+    const estrelas = [];
+    function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+    resize(); window.addEventListener('resize', resize);
+    for (let i = 0; i < 220; i++) estrelas.push({ x: Math.random()*innerWidth, y: Math.random()*innerHeight, r: Math.random()*1.5+0.3, vel: Math.random()*0.4+0.1, b: Math.random() });
+    (function loop() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        const t = Date.now()*0.001;
+        estrelas.forEach(e => {
+            e.y += e.vel; if (e.y > canvas.height) { e.y = 0; e.x = Math.random()*canvas.width; }
+            const a = 0.4 + 0.6*Math.abs(Math.sin(t*1.5+e.b*10));
+            ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
+        });
+        requestAnimationFrame(loop);
     })();
+
+    document.querySelectorAll('.aba-link').forEach(link => {
+        link.addEventListener('click', function() {
+            document.querySelectorAll('.aba-link').forEach(l => l.classList.remove('ativo', 'ativa'));
+            document.querySelectorAll('.aba-conteudo').forEach(c => c.classList.remove('ativa'));
+            this.classList.add('ativa');
+            document.getElementById(this.getAttribute('data-tab')).classList.add('ativa');
+        });
+    });
+
+    document.getElementById('btn-definicoes').addEventListener('click', () => {
+        document.getElementById('menu-botoes-raiz').style.display = 'none';
+        document.getElementById('painel-definicoes').style.display = 'flex';
+    });
+    document.getElementById('btn-voltar-menu').addEventListener('click', () => {
+        document.getElementById('painel-definicoes').style.display = 'none';
+        document.getElementById('menu-botoes-raiz').style.display = 'flex';
+    });
+    document.getElementById('btn-quit').addEventListener('click', () => {
+        window.close();
+        alert(window.idiomaAtual === 'pt' ? "Jogo Encerrado! (Podes fechar o separador)" : "Game Over! (You can close the tab)");
+    });
+
+    document.getElementById('lang-pt').addEventListener('click', function() {
+        document.getElementById('lang-en').classList.remove('ativo'); this.classList.add('ativo');
+        window.idiomaAtual = 'pt'; aplicarTraducoes();
+    });
+    document.getElementById('lang-en').addEventListener('click', function() {
+        document.getElementById('lang-pt').classList.remove('ativo'); this.classList.add('ativo');
+        window.idiomaAtual = 'en'; aplicarTraducoes();
+    });
+
+    const slSfx = document.getElementById('sl-sfx'), vlSfx = document.getElementById('vl-sfx');
+    slSfx.addEventListener('input', () => vlSfx.textContent = slSfx.value+'%');
+    const slMus = document.getElementById('sl-musica'), vlMus = document.getElementById('vl-musica');
+    slMus.addEventListener('input', () => vlMus.textContent = slMus.value+'%');
+
+    aplicarTraducoes();
     </script>
 
     <script type="module">
@@ -198,38 +368,41 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // --- GLOBAIS DE SISTEMA ---
+        let uiEscudo, uiOnda, uiDash, uiWave;
+
         let scene, renderer, controls;
         let cameraPerspetiva, cameraOrtografica, cameraAtiva;
         let naveJogador, fundoEstrelas, malhaEscudo, malhaOnda;
         let visualBlocos = new THREE.Group(), visual3D = new THREE.Group();
         
         let lasers = [], arrayInimigos = [], explosoes = [], particulasRasto = [];
-        let teclas = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
+        let estadoTeclas = { Esquerda: false, Direita: false, Avançar: false, Recuar: false };
         
         let pontos = 0, vidas = 3;
         let pontuacaoMaxima = parseInt(localStorage.getItem('galaga_highscore')) || 0;
         let hudVisivel = true, jogoAcabou = false;
-        let invulneravel = false, tempoInvulneravel = 0, proximoBonusVida = 5000; 
-        
-        let ultimoReforco = 0, catalogoNaves = {};   
-        let filaElite = ['Boss', 'Tanque', 'Tanque', 'Tanque', 'PortaAvioes', 'Kamikaze', 'Kamikaze', 'Caca', 'Caca'];
+        window.jogoPausado = false; 
 
-        // Habilidades
+        let invulneravel = false, tempoInvulneravel = 0, proximoBonusVida = 5000; 
+        let catalogoNaves = {};   
+
+        let waveAtual = 1;
+        let lasersInimigos = [];
+        const geoLaserInimigo = new THREE.CylinderGeometry(0.2, 0.2, 1.5);
+        const matLaserCaca = new THREE.MeshBasicMaterial({ color: 0xff8800 }); 
+        const geoLaserForte = new THREE.CylinderGeometry(0.5, 0.5, 2.5);
+        const matLaserTanque = new THREE.MeshBasicMaterial({ color: 0xff0000 }); 
+
         let escudoAtivo = false, cargaEscudo = 100, tempoFimEscudo = 0, ultimaAtualizacaoEscudo = Date.now();
         let ondaChoqueAtiva = false, raioOnda = 0, ultimoUsoOnda = 0;
         const COOLDOWN_ONDA = 15000;
-        
-        // --- GLOBAIS DE FÍSICA ASTEROIDS E SPAWN ---
+        let ultimoUsoDash = 0;
+        const COOLDOWN_DASH = 3000;
+
         let velNaveX = 0, velNaveY = 0;
-        let TETO_INIMIGOS = 30; 
-        let intervaloSpawn = 1500;
-        const raioBolha = 55;
+        let ultimoDrawHUD = 0;
+        let nivelEstrelas = 1; 
 
-        // --- SISTEMA DE LUZES (ESTRELAS) ---
-        let nivelEstrelas = 1; // 0=Desligado, 1=Normal, 2=Intenso, 3=Destaque
-
-        // --- GEOMETRIAS GLOBAIS OTIMIZADAS ---
         const geoLaserGlobal = new THREE.CylinderGeometry(0.15, 0.15, 2.0);
         const matLaserGlobal = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const geoExplosaoGlobal = new THREE.BoxGeometry(0.8, 0.8, 0.8);
@@ -248,25 +421,42 @@
         const vetorMundoInimigo = new THREE.Vector3();
         const vecInim = new THREE.Vector3();
 
+        let modoInicialCam = '3D';
+
         init();
         animate();
 
         function init() {
-            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 });
-            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 });
-            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155 });
-            const cVerde = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
-            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x004444 });
-            const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x444400 });
-            const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x4400aa });
-            const cLaranja = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0x884400 });
+            const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444, emissiveIntensity: 2.5 });
+            const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000, emissiveIntensity: 2.5 });
+            const cA = new THREE.MeshStandardMaterial({ color: 0x0055ff, emissive: 0x001155, emissiveIntensity: 2.5 });
+            const cVerde = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400, emissiveIntensity: 2.5 });
+            const cCiano = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x004444, emissiveIntensity: 2.5 });
+            const cAmarelo = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x444400, emissiveIntensity: 2.5 });
+            const cRoxo = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x4400aa, emissiveIntensity: 2.5 });
+            const cLaranja = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0x884400, emissiveIntensity: 2.5 });
 
             catalogoNaves = {
-                Kamikaze: [[0, 3, cV], [-1, 2, cV], [1, 2, cV], [0, 1, cB], [-1, 0, cAmarelo], [1, 0, cAmarelo]],
-                Caca: [[-2, 1, cCiano], [2, 1, cCiano], [-1, 0, cB], [0, 0, cA], [1, 0, cB]],
-                Tanque: [[-3, 2, cCiano], [3, 2, cCiano], [-2, 1, cVerde], [2, 1, cVerde], [0, 0, cV]],
-                PortaAvioes: [[-4, 1, cRoxo], [4, 1, cRoxo], [0, 0, cLaranja], [-2, -1, cB], [2, -1, cB]],
-                Boss: [[0, 4, cV], [-2, 2, cLaranja], [2, 2, cLaranja], [0, 1, cB], [-3, 0, cRoxo], [3, 0, cRoxo]]
+                Kamikaze: [
+                    [0, 3, cV], [-1, 2, cV], [1, 2, cV], [-2, 1, cAmarelo], [2, 1, cAmarelo],
+                    [0, 2, cV], [0, 1, cB], [0, 0, cV], [-1, -1, cLaranja], [1, -1, cLaranja]
+                ],
+                Caca: [
+                    [0, 2, cCiano], [0, 1, cB], [0, 0, cA], [0, -1, cB],
+                    [-1, 0, cCiano], [1, 0, cCiano], [-2, -1, cA], [2, -1, cA],
+                    [-2, 0, cB], [2, 0, cB], [0, -2, cV]
+                ],
+                Tanque: [
+                    [0, 2, cV], [0, 1, cVerde], [0, 0, cVerde], [-1, 0, cVerde], [1, 0, cVerde],
+                    [-2, 1, cCiano], [2, 1, cCiano], [-2, 0, cCiano], [2, 0, cCiano], 
+                    [-2, -1, cCiano], [2, -1, cCiano], [-1, -1, cAmarelo], [1, -1, cAmarelo]
+                ],
+                Boss: [
+                    [0, 4, cV], [0, 3, cV], [0, 2, cB], [0, 1, cB], [0, 0, cV],
+                    [-1, 2, cLaranja], [1, 2, cLaranja], [-1, 1, cLaranja], [1, 1, cLaranja],
+                    [-2, 1, cRoxo], [2, 1, cRoxo], [-3, 0, cRoxo], [3, 0, cRoxo],
+                    [-2, -1, cV], [2, -1, cV], [0, -1, cAmarelo]
+                ]
             };
 
             scene = new THREE.Scene();
@@ -281,7 +471,6 @@
             criarFundo();
             criarNave();
 
-            // Preparar a Malha da Onda de Choque
             const geoOnda = new THREE.RingGeometry(0.5, 1.0, 32);
             malhaOnda = new THREE.Mesh(geoOnda, new THREE.MeshBasicMaterial({ 
                 color: 0xff00ff, side: THREE.DoubleSide, transparent: true, opacity: 0.8 
@@ -293,27 +482,111 @@
             controls.enableDamping = true; controls.enablePan = false;
             controls.minDistance = 10; controls.maxDistance = 60;
 
-            atualizarHUD();
+            uiEscudo = document.getElementById('barra-escudo');
+            uiOnda = document.getElementById('barra-onda');
+            uiDash = document.getElementById('barra-dash');
+            uiWave = document.getElementById('wavenumero');
 
+            atualizarHUD();
+            configurarEventosMotores();
+        }
+
+        function configurarEventosMotores() {
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
+
+            window.addEventListener('keydown', (e) => {
+                if (window.funcaoEmCaptura && window.botaoEmCaptura) {
+                    e.stopPropagation();
+                    const novaTecla = e.code;
+                    
+                    Object.keys(window.mapeamentoTeclas).forEach(k => {
+                        if(window.mapeamentoTeclas[k] === window.funcaoEmCaptura) delete window.mapeamentoTeclas[k];
+                    });
+                    
+                    window.mapeamentoTeclas[novaTecla] = window.funcaoEmCaptura;
+                    
+                    if(window.funcaoEmCaptura === "Escudo") document.getElementById('txt-key-escudo').textContent = novaTecla.replace('Key','');
+                    if(window.funcaoEmCaptura === "Onda") document.getElementById('txt-key-onda').textContent = novaTecla.replace('Key','');
+                    if(window.funcaoEmCaptura === "Dash") document.getElementById('txt-key-dash').textContent = novaTecla.replace('Key','');
+
+                    window.funcaoEmCaptura = null;
+                    window.botaoEmCaptura.classList.remove('escutando');
+                    window.botaoEmCaptura = null;
+                    aplicarTraducoes();
+                }
+            });
+
+            document.getElementById('bt-2d').addEventListener('click', function() {
+                document.getElementById('bt-3d').classList.remove('ativo'); this.classList.add('ativo');
+                cameraAtiva = cameraOrtografica; modoInicialCam = '2D';
+            });
+            document.getElementById('bt-3d').addEventListener('click', function() {
+                document.getElementById('bt-2d').classList.remove('ativo'); this.classList.add('ativo');
+                cameraAtiva = cameraPerspetiva; modoInicialCam = '3D';
+            });
+
+            document.getElementById('icon-teclado').addEventListener('click', function() {
+                this.classList.add('ativo');
+                document.getElementById('icon-comando').classList.remove('ativo');
+            });
+
+            document.getElementById('icon-comando').addEventListener('click', function() {
+                const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+                if (!gamepads[0]) {
+                    const msg = window.idiomaAtual === 'pt' ? 
+                        "Comando não detetado! Liga um comando USB/Bluetooth ou prime um botão para acordar o comando." : 
+                        "Gamepad not detected! Please connect a USB/Bluetooth controller or press any button to wake it up.";
+                    alert(msg);
+                    return; 
+                }
+                this.classList.add('ativo');
+                document.getElementById('icon-teclado').classList.remove('ativo');
+            });
+
+            document.getElementById('btn-jogar').addEventListener('click', () => {
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('hud').style.display = 'block';
+                
+                if (window.jogoPausado) {
+                    window.jogoPausado = false;
+                } else {
+                    window.jogoIniciado = true;
+                    cameraAtiva = (modoInicialCam === '3D') ? cameraPerspetiva : cameraOrtografica;
+                }
+            });
+        }
+
+        function togglePausa() {
+            if(!window.jogoIniciado || jogoAcabou) return;
+            window.jogoPausado = !window.jogoPausado;
+            
+            if(window.jogoPausado) {
+                document.getElementById('hud').style.display = 'none';
+                document.getElementById('menu').style.display = 'flex';
+                document.getElementById('menu-botoes-raiz').style.display = 'flex';
+                document.getElementById('painel-definicoes').style.display = 'none';
+                aplicarTraducoes();
+            } else {
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('hud').style.display = 'block';
+            }
         }
 
         function atualizarHUD() {
             if (pontos > pontuacaoMaxima) {
-            pontuacaoMaxima = pontos;
-            localStorage.setItem('galaga_highscore', pontuacaoMaxima);
+                pontuacaoMaxima = pontos;
+                localStorage.setItem('galaga_highscore', pontuacaoMaxima);
             }
-
             if (pontos >= proximoBonusVida) { vidas++; proximoBonusVida += 5000; }
 
-            intervaloSpawn = Math.max(400, 1500 - (pontos * 0.05));
-            TETO_INIMIGOS = Math.min(60, 30 + Math.floor(pontos / 2000));
+            waveAtual = 1 + Math.floor(pontos / 2000);
 
             document.getElementById('pontuacao').innerText = pontos;
             document.getElementById('highscore').innerText = pontuacaoMaxima;
             document.getElementById('vidas').innerText = vidas;
+            if (uiWave) uiWave.innerText = waveAtual;
         }
 
         function configurarCamaras() {
@@ -324,7 +597,7 @@
             const frustumSize = 85; 
             cameraOrtografica = new THREE.OrthographicCamera((frustumSize * aspeto) / -2, (frustumSize * aspeto) / 2, frustumSize / 2, frustumSize / -2, 0.1, 1000);
             cameraOrtografica.position.set(0, 5, 25); 
-            cameraAtiva = cameraOrtografica; 
+            cameraAtiva = cameraPerspetiva; 
         }
 
         function configurarLuzes() {
@@ -336,7 +609,6 @@
 
         function criarNave() {
             naveJogador = new THREE.Group();
-            
             const geometria = new THREE.BoxGeometry(1, 1, 1);
             const cB = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 });
             const cV = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x440000 });
@@ -358,113 +630,99 @@
             ];
 
             designNave.forEach(bloco => {
-                const cubo = new THREE.Mesh(geometria, bloco[2]);
-                cubo.position.set(bloco[0], bloco[1], 0);
-                visualBlocos.add(cubo);
+                const cubo = new THREE.Mesh(geometria, bloco[2]); cubo.position.set(bloco[0], bloco[1], 0); visualBlocos.add(cubo);
             });
-            visualBlocos.scale.set(0.4, 0.4, 0.4);
-            naveJogador.add(visualBlocos);
+            visualBlocos.scale.set(0.4, 0.4, 0.4); naveJogador.add(visualBlocos);
 
             const loader = new GLTFLoader();
             loader.load('galaga_ship.glb', (gltf) => {
                 const modelo = gltf.scene;
-                modelo.scale.set(0.5, 0.5, 0.5); 
-                modelo.rotation.x = Math.PI / 2;
-                modelo.rotation.y = -Math.PI / 2; 
+                modelo.scale.set(0.5, 0.5, 0.5); modelo.rotation.x = Math.PI / 2; modelo.rotation.y = -Math.PI / 2; 
                 visual3D.add(modelo);
             });
-            visual3D.visible = false;
-            naveJogador.add(visual3D);
+            visual3D.visible = false; naveJogador.add(visual3D);
 
             const luzPonto = new THREE.PointLight(0x0055ff, 5, 20);
-            luzPonto.position.set(0, -2, 0); 
-            naveJogador.add(luzPonto); 
+            luzPonto.position.set(0, -2, 0); naveJogador.add(luzPonto); 
 
             const geoEscudo = new THREE.IcosahedronGeometry(3.5, 1);
             malhaEscudo = new THREE.Mesh(geoEscudo, new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.6 }));
-            malhaEscudo.visible = false;
-            naveJogador.add(malhaEscudo);
+            malhaEscudo.visible = false; naveJogador.add(malhaEscudo);
 
-            naveJogador.position.set(0, -20, 0); 
-            scene.add(naveJogador);
+            naveJogador.position.set(0, -20, 0); scene.add(naveJogador);
         }
 
-        // --- SISTEMA DE FÁBRICA DE INIMIGOS ---
         function fabricarInimigo(tipoDaNave, valorPontos) {
-            const matriz = catalogoNaves[tipoDaNave];
-            if (!matriz) return new THREE.Group();
-
-            const contentor = new THREE.Group();
-            const geometria = new THREE.BoxGeometry(1, 1, 1);
+            const matriz = catalogoNaves[tipoDaNave]; if (!matriz) return new THREE.Group();
+            const contentor = new THREE.Group(); const geometria = new THREE.BoxGeometry(1, 1, 1);
 
             matriz.forEach(bloco => {
-                const cubo = new THREE.Mesh(geometria, bloco[2]);
-                cubo.position.set(bloco[0], bloco[1], 0);
-                contentor.add(cubo);
+                const cubo = new THREE.Mesh(geometria, bloco[2]); cubo.position.set(bloco[0], bloco[1], 0); contentor.add(cubo);
             });
-            contentor.scale.set(0.35, 0.35, 0.35);
+            contentor.scale.set(0.55, 0.55, 0.55);
 
             const matSeta = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0 });
-            const seta = new THREE.Mesh(geoSetaGlobal, matSeta);
-            seta.renderOrder = 999; 
-            scene.add(seta);
+            const seta = new THREE.Mesh(geoSetaGlobal, matSeta); seta.renderOrder = 999; scene.add(seta);
 
             contentor.userData = {
                 tipo: tipoDaNave, pontos: valorPontos, estado: 'ATACANDO',
                 vida: (tipoDaNave === 'Boss') ? 10 : (tipoDaNave === 'Tanque' ? 3 : 1),
-                setaGui: seta,
-                anguloMovimento: 0,
-                velocidade: 0.2
+                setaGui: seta, anguloMovimento: 0, velocidade: 0.2
             };
-
             return contentor;
         }
 
-        function gerirReforcos() {
-            if (jogoAcabou) return;
+        let ultimoSpawn = 0;
+        const RAIO_BOLHA = 60;
+
+        function gerirSpawns() {
+            if (jogoAcabou || window.jogoPausado) return;
             const agora = Date.now();
             
-            if (agora - ultimoReforco > intervaloSpawn && arrayInimigos.length < TETO_INIMIGOS) {
-                ultimoReforco = agora;
+            if (agora - ultimoSpawn < Math.max(300, 1000 - (waveAtual * 50))) return;
+            ultimoSpawn = agora;
 
-                let quantidadeANascer = Math.floor(Math.random() * 3) + 2;
-                
-                for (let i = 0; i < quantidadeANascer; i++) {
-                    if (arrayInimigos.length >= TETO_INIMIGOS) break;
+            let contBoss = 0, contTanque = 0, contCaca = 0;
+            let navesMaesVivas = [];
+            
+            arrayInimigos.forEach(inim => {
+                if (inim.userData.tipo === 'Boss') { contBoss++; navesMaesVivas.push(inim); }
+                if (inim.userData.tipo === 'Tanque') contTanque++;
+                if (inim.userData.tipo === 'Caca') contCaca++;
+            });
 
-                    let tipo, pts;
-                    if (filaElite.length > 0) {
-                        tipo = filaElite.shift(); 
-                        pts = (tipo === 'Boss') ? 400 : (tipo === 'PortaAvioes' ? 200 : 100);
-                    } else {
-                        const sorteio = Math.random();
-                        if (sorteio > 0.9) { tipo = 'PortaAvioes'; pts = 200; }
-                        else if (sorteio > 0.7) { tipo = 'Tanque'; pts = 150; }
-                        else if (sorteio > 0.4) { tipo = 'Kamikaze'; pts = 100; }
-                        else { tipo = 'Caca'; pts = 50; }
-                    }
+            if (contBoss >= 3 && contTanque >= 5 && contCaca >= 15) return;
 
-                    const novoInimigo = fabricarInimigo(tipo, pts);
-                    
-                    const anguloSpawn = Math.random() * Math.PI * 2; 
-                    novoInimigo.position.set(
-                        naveJogador.position.x + Math.cos(anguloSpawn) * raioBolha,
-                        naveJogador.position.y + Math.sin(anguloSpawn) * raioBolha,
-                        0
-                    );
+            let tipoEscolhido = null; let sorteio = Math.random();
+            if (contBoss < 3 && sorteio > 0.85) tipoEscolhido = 'Boss';
+            else if (contTanque < 5 && contBoss > 0 && sorteio > 0.6) tipoEscolhido = 'Tanque';
+            else if (contCaca < 15) tipoEscolhido = 'Caca';
 
-                    const dX = naveJogador.position.x - novoInimigo.position.x;
-                    const dY = naveJogador.position.y - novoInimigo.position.y;
-                    novoInimigo.userData.anguloMovimento = Math.atan2(dY, dX);
-                    novoInimigo.userData.velocidade = 0.15 + Math.random() * 0.15;
-                
-                    scene.add(novoInimigo);
-                    arrayInimigos.push(novoInimigo);
-                }
+            if (!tipoEscolhido) return;
+
+            const anguloSpawn = Math.random() * Math.PI * 2;
+            const spawnX = naveJogador.position.x + Math.cos(anguloSpawn) * RAIO_BOLHA;
+            const spawnY = naveJogador.position.y + Math.sin(anguloSpawn) * RAIO_BOLHA;
+
+            let inimigo = fabricarInimigo(tipoEscolhido, tipoEscolhido === 'Boss' ? 1000 : (tipoEscolhido === 'Tanque' ? 300 : 100));
+            inimigo.position.set(spawnX, spawnY, 0);
+
+            if (tipoEscolhido === 'Boss') {
+                inimigo.userData = { ...inimigo.userData, estado: 'MOTHERSHIP', ultimoTiro: Date.now(), velocidade: 0.04 };
+            } 
+            else if (tipoEscolhido === 'Tanque') {
+                let chefeSorteado = navesMaesVivas[Math.floor(Math.random() * navesMaesVivas.length)];
+                inimigo.userData = { ...inimigo.userData, estado: 'ESCOLTA', offsetX: (Math.random()-0.5)*20, offsetY: (Math.random()-0.5)*20, chefe: chefeSorteado, ultimoTiro: Date.now() + Math.random()*2000, velocidade: 0.06 };
+            } 
+            else if (tipoEscolhido === 'Caca') {
+                inimigo.userData = { ...inimigo.userData, estado: 'FLANQUEADOR', anguloFlanco: anguloSpawn, raioFlanco: 25 + Math.random()*15, ultimoTiro: Date.now() + Math.random()*2000, velocidade: 0.25 };
             }
+
+            scene.add(inimigo); arrayInimigos.push(inimigo);
         }
 
-        function disparar() {
+        function executarDisparoJogador() {
+            if(window.jogoPausado || jogoAcabou) return;
             const angulo = naveJogador.rotation.z;
             const dirX = -Math.sin(angulo), dirY = Math.cos(angulo);
             const latX = Math.cos(angulo), latY = Math.sin(angulo);
@@ -481,83 +739,164 @@
             scene.add(lDir); lasers.push(lDir);
         }
 
-        function criarExplosao(pos) {
-            const grupoExp = new THREE.Group();
-            grupoExp.position.copy(pos); 
-            for (let i = 0; i < 8; i++) {
-                const frag = new THREE.Mesh(geoExplosaoGlobal, materiaisExplosaoGlobais[Math.floor(Math.random() * materiaisExplosaoGlobais.length)]);
-                const ang = (i / 8) * Math.PI * 2;
-                frag.userData = {velX: Math.cos(ang) * 0.6, velY: Math.sin(ang) * 0.6};
-                grupoExp.add(frag);
-            }
-            grupoExp.userData.tempoVida = 20; 
-            scene.add(grupoExp); explosoes.push(grupoExp);
+        function dispararInimigo(posicaoInimigo, velocidad, forte) {
+            const geo = forte ? geoLaserForte : geoLaserInimigo;
+            const mat = forte ? matLaserTanque : matLaserCaca;
+            const tiro = new THREE.Mesh(geo, mat); tiro.position.copy(posicaoInimigo);
+            
+            const angulo = Math.atan2(naveJogador.position.y - posicaoInimigo.y, naveJogador.position.x - posicaoInimigo.x);
+            tiro.rotation.z = angulo - Math.PI/2;
+            tiro.userData = { velX: Math.cos(angulo) * velocidad, velY: Math.sin(angulo) * velocidad };
+            scene.add(tiro); lasersInimigos.push(tiro);
         }
 
-        // --- SISTEMA DE GESTÃO DA GRÁFICA (ESTRELAS) ---
+        function lancarKamikaze(posicaoOrigem) {
+            let kami = fabricarInimigo('Kamikaze', 200); kami.position.copy(posicaoOrigem);
+            kami.userData = { ...kami.userData, estado: 'ATACANDO', anguloMovimento: 0, velocidade: 0.35 };
+            scene.add(kami); arrayInimigos.push(kami);
+        }
+
+        function criarExplosao(pos) {
+            const grupoExp = new THREE.Group(); grupoExp.position.copy(pos); 
+            for (let i = 0; i < 8; i++) {
+                const frag = new THREE.Mesh(geoExplosaoGlobal, materiaisExplosaoGlobais[Math.floor(Math.random() * materiaisExplosaoGlobais.length)]);
+                const ang = (i / 8) * Math.PI * 2; frag.userData = {velX: Math.cos(ang) * 0.6, velY: Math.sin(ang) * 0.6};
+                grupoExp.add(frag);
+            }
+            grupoExp.userData.tempoVida = 20; scene.add(grupoExp); explosoes.push(grupoExp);
+        }
+
+        function despoletarOndaChoque() {
+            if(window.jogoPausado || ondaChoqueAtiva || Date.now() - ultimoUsoOnda <= COOLDOWN_ONDA) return;
+            ondaChoqueAtiva = true; raioOnda = 1; malhaOnda.position.copy(naveJogador.position); 
+            malhaOnda.visible = true; ultimoUsoOnda = Date.now();
+        }
+
+        function despoletarEscudo() {
+            if(window.jogoPausado || cargaEscudo < 100 || escudoAtivo) return;
+            escudoAtivo = true; malhaEscudo.visible = true; tempoFimEscudo = Date.now() + 5000;
+        }
+
+        function despoletarDash() {
+            if(window.jogoPausado || Date.now() - ultimoUsoDash < COOLDOWN_DASH) return;
+            ultimoUsoDash = Date.now();
+            const angulo = naveJogador.rotation.z; const forcaDash = 1.7; 
+            velNaveX -= Math.sin(angulo) * forcaDash; velNaveY += Math.cos(angulo) * forcaDash;
+        }
+
         function atualizarBrilhoEstrelas() {
             if (!fundoEstrelas) return;
-
             switch (nivelEstrelas) {
-                case 0: // Desligado
-                    fundoEstrelas.visible = false;
-                    break;
-                case 1: // Normal
-                    fundoEstrelas.visible = true;
-                    fundoEstrelas.material.size = 3.0; // Píxeis absolutos
-                    fundoEstrelas.material.opacity = 0.6;
-                    fundoEstrelas.material.color.setHex(0xffffff); 
-                    break;
-                case 2: // Intenso
-                    fundoEstrelas.visible = true;
-                    fundoEstrelas.material.size = 6.0; 
-                    fundoEstrelas.material.opacity = 1.0;
-                    fundoEstrelas.material.color.setHex(0xaaaaff); 
-                    break;
-                case 3: // Destaque/Supernova
-                    fundoEstrelas.visible = true;
-                    fundoEstrelas.material.size = 10.0; 
-                    fundoEstrelas.material.opacity = 1.0;
-                    fundoEstrelas.material.color.setHex(0xffffff); 
-                    break;
+                case 0: fundoEstrelas.visible = false; break;
+                case 1: fundoEstrelas.visible = true; fundoEstrelas.material.size = 3.0; fundoEstrelas.material.opacity = 0.6; fundoEstrelas.material.color.setHex(0xffffff); break;
+                case 2: fundoEstrelas.visible = true; fundoEstrelas.material.size = 6.0; fundoEstrelas.material.opacity = 1.0; fundoEstrelas.material.color.setHex(0xaaaaff); break;
+                case 3: fundoEstrelas.visible = true; fundoEstrelas.material.size = 10.0; fundoEstrelas.material.opacity = 1.0; fundoEstrelas.material.color.setHex(0xffffff); break;
             }
         }
 
         function onKeyDown(event) {
+            if (window.funcaoEmCaptura) return; 
             if (!window.jogoIniciado) return;
             if (jogoAcabou) { if (event.code === 'Enter') location.reload(); return; }
             
+            if (event.code === 'Escape' || event.code === 'KeyP') { togglePausa(); return; }
+            if (window.jogoPausado) return;
+
+            // --- CORREÇÃO: REINTRODUÇÃO DA ESCUTA DA TECLA L ---
+            if (event.code === 'KeyL') {
+                nivelEstrelas = (nivelEstrelas + 1) % 4;
+                atualizarBrilhoEstrelas();
+            }
+
             if (event.key === 'Control') cameraAtiva = (cameraAtiva === cameraPerspetiva) ? cameraOrtografica : cameraPerspetiva;
             if (event.code === 'Tab') { event.preventDefault(); hudVisivel = !hudVisivel; document.getElementById('hud').style.display = hudVisivel ? 'block' : 'none'; }
             
-            if (event.code === 'ArrowLeft') teclas.ArrowLeft = true;
-            if (event.code === 'ArrowRight') teclas.ArrowRight = true;
-            if (event.code === 'ArrowUp') teclas.ArrowUp = true;
-            if (event.code === 'ArrowDown') teclas.ArrowDown = true;
-            
-            if (event.code === 'KeyZ') disparar();
-            if (event.code === 'KeyW' && cargaEscudo >= 100 && !escudoAtivo) {
-                escudoAtivo = true; malhaEscudo.visible = true; tempoFimEscudo = Date.now() + 5000;
-            }
-            if (event.code === 'Space') {
-                if (!ondaChoqueAtiva && Date.now() - ultimoUsoOnda > COOLDOWN_ONDA) {
-                    ondaChoqueAtiva = true; raioOnda = 1; malhaOnda.position.copy(naveJogador.position); 
-                    malhaOnda.visible = true; ultimoUsoOnda = Date.now();
-                }
-            }
-            // --- TROCAR LUZES DAS ESTRELAS ---
-            if (event.code === 'KeyL') {
-                nivelEstrelas = (nivelEstrelas + 1) % 4; // Ciclo: 0, 1, 2, 3
-                atualizarBrilhoEstrelas();
+            const acao = window.mapeamentoTeclas[event.code];
+            if (acao) {
+                if (acao === "Esquerda") estadoTeclas.Esquerda = true;
+                if (acao === "Direita") estadoTeclas.Direita = true;
+                if (acao === "Avançar") estadoTeclas.Avançar = true;
+                if (acao === "Recuar") estadoTeclas.Recuar = true;
+                if (acao === "Disparar") executarDisparoJogador();
+                if (acao === "Escudo") despoletarEscudo();
+                if (acao === "Onda") despoletarOndaChoque();
+                if (acao === "Dash") despoletarDash();
+                
+                document.getElementById('icon-comando').classList.remove('ativo');
+                document.getElementById('icon-teclado').classList.add('ativo');
             }
         }
 
         function onKeyUp(event) {
-            if (!window.jogoIniciado) return;
-            if (event.code === 'ArrowLeft') teclas.ArrowLeft = false;
-            if (event.code === 'ArrowRight') teclas.ArrowRight = false;
-            if (event.code === 'ArrowUp') teclas.ArrowUp = false;
-            if (event.code === 'ArrowDown') teclas.ArrowDown = false;
+            const acao = window.mapeamentoTeclas[event.code];
+            if (acao) {
+                if (acao === "Esquerda") estadoTeclas.Esquerda = false;
+                if (acao === "Direita") estadoTeclas.Direita = false;
+                if (acao === "Avançar") estadoTeclas.Avançar = false;
+                if (acao === "Recuar") estadoTeclas.Recuar = false;
+            }
+        }
+
+        let travarBotaoPauseComando = false;
+        let travarBotaoDisparoComando = false;
+        let travarBotaoOndaComando = false;
+        let travarBotaoDashComando = false;
+        let travarBotaoEscudoComando = false;
+        let travarBotaoEstrelasComando = false; // --- CORREÇÃO: ADICIONADA TRAVA BOOLEANA DO L1 ---
+
+        function processarGamepadIO() {
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            const gp = gamepads[0]; 
+            if (!gp) return;
+
+            if(!document.getElementById('icon-comando').classList.contains('ativo')) {
+                document.getElementById('icon-teclado').classList.remove('ativo');
+                document.getElementById('icon-comando').classList.add('ativo');
+            }
+
+            if (gp.buttons[9].pressed) {
+                if (!travarBotaoPauseComando) { togglePausa(); travarBotaoPauseComando = true; }
+            } else { travarBotaoPauseComando = false; }
+
+            if (window.jogoPausado || jogoAcabou) return;
+
+            // gp.axes[0] representa o movimento horizontal do analógico esquerdo (L3)
+            const eixoHorizontalL3 = gp.axes[0]; 
+            
+            // Os botões de direção (D-Pad) mantêm a função combinados com o analógico horizontal
+            estadoTeclas.Esquerda = gp.buttons[14].pressed || eixoHorizontalL3 < -0.3;
+            estadoTeclas.Direita  = gp.buttons[15].pressed || eixoHorizontalL3 > 0.3;
+            
+            // Suporte adicionado para os gatilhos traseiros R2 (índice 7) e L2 (índice 6) junto com o D-Pad
+            estadoTeclas.Avançar  = gp.buttons[12].pressed || gp.buttons[7].pressed;
+            estadoTeclas.Recuar   = gp.buttons[13].pressed || gp.buttons[6].pressed;
+
+            if (gp.buttons[0].pressed) {
+                if (!travarBotaoDisparoComando) { executarDisparoJogador(); travarBotaoDisparoComando = true; }
+            } else { travarBotaoDisparoComando = false; }
+
+            if (gp.buttons[1].pressed) {
+                if (!travarBotaoOndaComando) { despoletarOndaChoque(); travarBotaoOndaComando = true; }
+            } else { travarBotaoOndaComando = false; }
+
+            if (gp.buttons[2].pressed) {
+                if (!travarBotaoDashComando) { despoletarDash(); travarBotaoDashComando = true; }
+            } else { travarBotaoDashComando = false; }
+
+            if (gp.buttons[3].pressed) {
+                if (!travarBotaoEscudoComando) { despoletarEscudo(); travarBotaoEscudoComando = true; }
+            } else { travarBotaoEscudoComando = false; }
+
+            // --- CORREÇÃO: MAPEAMENTO DO BOTÃO L1 DO COMANDO (INDEX 4) ---
+            if (gp.buttons[4].pressed) {
+                if (!travarBotaoEstrelasComando) {
+                    nivelEstrelas = (nivelEstrelas + 1) % 4;
+                    atualizarBrilhoEstrelas();
+                    travarBotaoEstrelasComando = true; 
+                }
+            } else { 
+                travarBotaoEstrelasComando = false; 
+            }
         }
 
         function onWindowResize() {
@@ -570,40 +909,39 @@
         }
 
         function criarFundo() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 32; canvas.height = 32;
-            const ctx = canvas.getContext('2d');
-            const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            const canvasTmp = document.createElement('canvas'); canvasTmp.width = 32; canvasTmp.height = 32;
+            const ctxTmp = canvasTmp.getContext('2d');
+            const grad = ctxTmp.createRadialGradient(16, 16, 0, 16, 16, 16);
             grad.addColorStop(0, 'white'); grad.addColorStop(0.2, 'rgba(200, 220, 255, 0.8)'); grad.addColorStop(1, 'transparent');
-            ctx.fillStyle = grad; ctx.fillRect(0, 0, 32, 32);
+            ctxTmp.fillStyle = grad; ctxTmp.fillRect(0, 0, 32, 32);
             
-            const tex = new THREE.CanvasTexture(canvas);
-            const geo = new THREE.BufferGeometry(); 
-            const pos = new Float32Array(8000 * 3); // 3000 estrelas!
+            const tex = new THREE.CanvasTexture(canvasTmp); const geo = new THREE.BufferGeometry(); 
+            const pos = new Float32Array(8000 * 3); 
             for(let i = 0; i < 24000; i += 3) {
-                // A área original era de 300x300. Agora é de 800x800 unidades!
-                pos[i] = (Math.random() - 0.5) * 800;     
-                pos[i+1] = (Math.random() - 0.5) * 800;   
-                pos[i+2] = (Math.random() - 0.5) * 40 - 60; 
+                pos[i] = (Math.random() - 0.5) * 800; pos[i+1] = (Math.random() - 0.5) * 800; pos[i+2] = (Math.random() - 0.5) * 40 - 60; 
             }
             geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
             
-            // O SEGREDO DO 2D: sizeAttenuation: false garante que o pixel size é respeitado
             fundoEstrelas = new THREE.Points(geo, new THREE.PointsMaterial({ 
-                color: 0xffffff, size: 3.0, sizeAttenuation: false, map: tex, 
-                transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false 
+                color: 0xffffff, size: 3.0, sizeAttenuation: false, map: tex, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false 
             }));
-            scene.add(fundoEstrelas);
+            fundoEstrelas.frustumCulled = false; scene.add(fundoEstrelas);
         }
 
-        // --- MOTOR PRINCIPAL ---
         function animate() {
             if (jogoAcabou) { renderer.render(scene, cameraAtiva); return; }
             requestAnimationFrame(animate);
 
             const agora = Date.now();
-            const angulo = naveJogador.rotation.z; 
             
+            processarGamepadIO();
+
+            if (!window.jogoIniciado || window.jogoPausado) {
+                renderer.render(scene, cameraAtiva);
+                return;
+            }
+
+            const angulo = naveJogador.rotation.z; 
             if (cameraAtiva === cameraPerspetiva) {
                 cameraPerspetiva.position.set(naveJogador.position.x + Math.sin(angulo)*30, naveJogador.position.y - Math.cos(angulo)*30, 20);
                 cameraPerspetiva.up.set(-Math.sin(angulo), Math.cos(angulo), 0);
@@ -613,89 +951,107 @@
             }
             controls.target.copy(naveJogador.position); controls.update();
 
-            if (!window.jogoIniciado) {
-                renderer.render(scene, cameraAtiva);
-                return; // Impede que o resto do código do jogo corra
-            }
-
             const vRot = 0.05, acel = 0.015, fricc = 0.985;
-            if (teclas.ArrowLeft) naveJogador.rotation.z += vRot;
-            if (teclas.ArrowRight) naveJogador.rotation.z -= vRot;
-            if (teclas.ArrowUp) {
-                velNaveX -= Math.sin(naveJogador.rotation.z) * acel;
-                velNaveY += Math.cos(naveJogador.rotation.z) * acel;
+            if (estadoTeclas.Esquerda) naveJogador.rotation.z += vRot;
+            if (estadoTeclas.Direita) naveJogador.rotation.z -= vRot;
+            if (estadoTeclas.Avançar) {
+                velNaveX -= Math.sin(naveJogador.rotation.z) * acel; velNaveY += Math.cos(naveJogador.rotation.z) * acel;
             }
-            if (teclas.ArrowDown) {
-                velNaveX += Math.sin(naveJogador.rotation.z) * (acel / 2); 
-                velNaveY -= Math.cos(naveJogador.rotation.z) * (acel / 2);
+            if (estadoTeclas.Recuar) {
+                velNaveX += Math.sin(naveJogador.rotation.z) * (acel / 2); velNaveY -= Math.cos(naveJogador.rotation.z) * (acel / 2);
             }
             velNaveX *= fricc; velNaveY *= fricc;
             naveJogador.position.x += velNaveX; naveJogador.position.y += velNaveY;
 
-            gerirReforcos();
+            gerirSpawns();
 
             if (ondaChoqueAtiva) {
-                raioOnda += 1.5; 
-                malhaOnda.scale.set(raioOnda, raioOnda, 1);
+                raioOnda += 1.5; malhaOnda.scale.set(raioOnda, raioOnda, 1);
                 malhaOnda.material.opacity = Math.max(0, 0.8 - (raioOnda / 60)); 
-
                 const raioQuadrado = raioOnda * raioOnda; 
                 
                 for (let j = arrayInimigos.length - 1; j >= 0; j--) {
                     let inim = arrayInimigos[j];
                     if (inim.position.distanceToSquared(malhaOnda.position) < raioQuadrado) {
-                        criarExplosao(inim.position);
-                        pontos += inim.userData.pontos;
+                        criarExplosao(inim.position); pontos += inim.userData.pontos;
                         if (inim.userData.setaGui) { scene.remove(inim.userData.setaGui); inim.userData.setaGui.material.dispose(); }
-                        inim.parent.remove(inim);
-                        arrayInimigos.splice(j, 1);
+                        inim.parent.remove(inim); arrayInimigos.splice(j, 1);
                     }
                 }
                 atualizarHUD();
-
                 if (raioOnda > 60) { ondaChoqueAtiva = false; malhaOnda.visible = false; }
             }
 
             for (let j = arrayInimigos.length - 1; j >= 0; j--) {
-                let inim = arrayInimigos[j]; 
-                
-                if (inim && inim.userData.estado === 'ATACANDO') {
+                let inim = arrayInimigos[j]; let ud = inim.userData;
+                if (!inim) continue;
+
+                if (ud.estado === 'MOTHERSHIP') {
+                    let distSq = inim.position.distanceToSquared(naveJogador.position);
                     let anguloAlvo = Math.atan2(naveJogador.position.y - inim.position.y, naveJogador.position.x - inim.position.x);
-                    let diffAngulo = anguloAlvo - inim.userData.anguloMovimento;
+                    
+                    if (distSq > 2500) { 
+                        inim.position.x += Math.cos(anguloAlvo) * ud.velocidade; inim.position.y += Math.sin(anguloAlvo) * ud.velocidade;
+                    } else if (distSq < 1500) { 
+                        inim.position.x -= Math.cos(anguloAlvo) * ud.velocidade; inim.position.y -= Math.sin(anguloAlvo) * ud.velocidade;
+                    }
+                    inim.rotation.z = anguloAlvo - (Math.PI / 2);
+
+                    if (agora - ud.ultimoTiro > 3000) {
+                        lancarKamikaze(new THREE.Vector3(inim.position.x, inim.position.y, 0)); ud.ultimoTiro = agora;
+                    }
+                } 
+                else if (ud.estado === 'ESCOLTA') {
+                    if (ud.chefe && ud.chefe.parent) {
+                        let alvoX = ud.chefe.position.x + ud.offsetX; let alvoY = ud.chefe.position.y + ud.offsetY;
+                        inim.position.x += (alvoX - inim.position.x) * ud.velocidade; inim.position.y += (alvoY - inim.position.y) * ud.velocidade;
+                    } else { ud.estado = 'ATACANDO'; }
+                    
+                    inim.rotation.z = Math.atan2(naveJogador.position.y - inim.position.y, naveJogador.position.x - inim.position.x) - (Math.PI / 2);
+                    if (agora - ud.ultimoTiro > 5000) { dispararInimigo(inim.position, 0.6, true); ud.ultimoTiro = agora; }
+                }
+                else if (ud.estado === 'FLANQUEADOR') {
+                    ud.anguloFlanco += 0.01; 
+                    let alvoX = naveJogador.position.x + Math.cos(ud.anguloFlanco) * ud.raioFlanco;
+                    let alvoY = naveJogador.position.y + Math.sin(ud.anguloFlanco) * ud.raioFlanco;
+
+                    let anguloMover = Math.atan2(alvoY - inim.position.y, alvoX - inim.position.x);
+                    inim.position.x += Math.cos(anguloMover) * ud.velocidade; inim.position.y += Math.sin(anguloMover) * ud.velocidade;
+                    inim.rotation.z = Math.atan2(naveJogador.position.y - inim.position.y, naveJogador.position.x - inim.position.x) - (Math.PI / 2);
+
+                    if (agora - ud.ultimoTiro > 2000) { dispararInimigo(inim.position, 0.4, false); ud.ultimoTiro = agora + Math.random() * 1000; }
+                }
+                else if (ud.estado === 'ATACANDO') {
+                    let anguloAlvo = Math.atan2(naveJogador.position.y - inim.position.y, naveJogador.position.x - inim.position.x);
+                    let diffAngulo = anguloAlvo - ud.anguloMovimento;
                     while (diffAngulo <= -Math.PI) diffAngulo += Math.PI * 2;
                     while (diffAngulo > Math.PI) diffAngulo -= Math.PI * 2;
                     
-                    const capacidadeCurva = 0.006;
-                    inim.userData.anguloMovimento += Math.max(-capacidadeCurva, Math.min(capacidadeCurva, diffAngulo));
-                    
-                    inim.position.x += Math.cos(inim.userData.anguloMovimento) * inim.userData.velocidade;
-                    inim.position.y += Math.sin(inim.userData.anguloMovimento) * inim.userData.velocidade;
-                    inim.rotation.z = inim.userData.anguloMovimento - (Math.PI / 2);
+                    ud.anguloMovimento += Math.max(-0.04, Math.min(0.04, diffAngulo));
+                    inim.position.x += Math.cos(ud.anguloMovimento) * (ud.velocidade || 0.35); inim.position.y += Math.sin(ud.anguloMovimento) * (ud.velocidade || 0.35);
+                    inim.rotation.z = ud.anguloMovimento - (Math.PI / 2);
+                }
 
-                    let seta = inim.userData.setaGui;
-                    if (seta) {
-                        if (cameraAtiva === cameraPerspetiva) {
-                            const dirSeta = new THREE.Vector3().subVectors(inim.position, naveJogador.position);
-                            const dist = dirSeta.length();
-                            dirSeta.normalize();
-                            seta.position.copy(naveJogador.position).add(dirSeta.multiplyScalar(8));
-                            seta.rotation.z = Math.atan2(dirSeta.y, dirSeta.x) - Math.PI / 2;
-                            seta.material.opacity = THREE.MathUtils.clamp(1.0 - (dist / 120), 0.0, 0.8);
-                            seta.visible = true;
-                        } else seta.visible = false;
-                    }
+                let seta = ud.setaGui;
+                if (seta) {
+                    if (cameraAtiva === cameraPerspetiva) {
+                        const dirSeta = new THREE.Vector3().subVectors(inim.position, naveJogador.position);
+                        const dist = dirSeta.length(); dirSeta.normalize();
+                        seta.position.copy(naveJogador.position).add(dirSeta.multiplyScalar(8));
+                        seta.rotation.z = Math.atan2(dirSeta.y, dirSeta.x) - Math.PI / 2;
+                        seta.material.opacity = THREE.MathUtils.clamp(1.0 - (dist / 120), 0.0, 0.8); seta.visible = true;
+                    } else seta.visible = false;
+                }
 
-                    if (inim.position.distanceToSquared(naveJogador.position) > 12000) {
-                        if (inim.userData.setaGui) { scene.remove(inim.userData.setaGui); inim.userData.setaGui.material.dispose(); }
-                        scene.remove(inim); arrayInimigos.splice(j, 1);
-                    }
+                if (inim.position.distanceToSquared(naveJogador.position) > 15000) {
+                    if (ud.setaGui) { scene.remove(ud.setaGui); ud.setaGui.material.dispose(); }
+                    scene.remove(inim); arrayInimigos.splice(j, 1);
                 }
             }
 
             if (!invulneravel) {
                 for (let j = arrayInimigos.length - 1; j >= 0; j--) {
-                    let inimigo = arrayInimigos[j];
-                    inimigo.getWorldPosition(vetorMundoInimigo);
+                    let inimigo = arrayInimigos[j]; inimigo.getWorldPosition(vetorMundoInimigo);
 
                     if (naveJogador.position.distanceToSquared(vetorMundoInimigo) < 9.0) {
                         if (escudoAtivo) {
@@ -707,27 +1063,40 @@
                             if (inimigo.userData.setaGui) { scene.remove(inimigo.userData.setaGui); inimigo.userData.setaGui.material.dispose(); }
                             inimigo.parent.remove(inimigo); arrayInimigos.splice(j, 1);
                            if (vidas <= 0) {
-                                document.getElementById('vidas').innerText = "0"; 
-                                document.getElementById('pontuacao-final').innerText = pontos;
-                                document.getElementById('ecra-gameover').style.display = 'flex';
-                                jogoAcabou = true;
-                            } else {
-                                invulneravel = true; tempoInvulneravel = Date.now();
-                            }
+                                document.getElementById('vidas').innerText = "0"; document.getElementById('pontuacao-final').innerText = pontos;
+                                document.getElementById('ecra-gameover').style.display = 'flex'; jogoAcabou = true;
+                            } else { invulneravel = true; tempoInvulneravel = Date.now(); }
                         }
                         break; 
                     }
                 }
             }
 
+            for (let i = lasersInimigos.length - 1; i >= 0; i--) {
+                let laser = lasersInimigos[i]; laser.position.x += laser.userData.velX; laser.position.y += laser.userData.velY;
+
+                if (!invulneravel && laser.position.distanceToSquared(naveJogador.position) < 4.0) {
+                    if (!escudoAtivo) {
+                        vidas--; atualizarHUD(); criarExplosao(naveJogador.position);
+                        if (vidas <= 0) {
+                            document.getElementById('vidas').innerText = "0"; document.getElementById('pontuacao-final').innerText = pontos;
+                            document.getElementById('ecra-gameover').style.display = 'flex'; jogoAcabou = true;
+                        } else { invulneravel = true; tempoInvulneravel = agora; }
+                    }
+                    scene.remove(laser); lasersInimigos.splice(i, 1); continue;
+                }
+
+                if (Math.abs(laser.position.x - naveJogador.position.x) > 100 || Math.abs(laser.position.y - naveJogador.position.y) > 100) {
+                    scene.remove(laser); lasersInimigos.splice(i, 1);
+                }
+            }
+
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let laser = lasers[i];
-                laser.position.x += laser.userData.velX; laser.position.y += laser.userData.velY;
+                let laser = lasers[i]; laser.position.x += laser.userData.velX; laser.position.y += laser.userData.velY;
                 let destruido = false; 
                 
                 for (let j = arrayInimigos.length - 1; j >= 0; j--) {
-                    let inim = arrayInimigos[j];
-                    inim.getWorldPosition(vecInim);
+                    let inim = arrayInimigos[j]; inim.getWorldPosition(vecInim);
                     
                     if (laser.position.distanceToSquared(vecInim) < 6.25) {
                         criarExplosao(vecInim);
@@ -745,21 +1114,16 @@
             }
             
             for (let i = explosoes.length - 1; i >= 0; i--) {
-                let exp = explosoes[i];
-                exp.children.forEach(f => { f.position.x += f.userData.velX; f.position.y += f.userData.velY; f.scale.multiplyScalar(0.85); });
-                exp.userData.tempoVida--;
-                if (exp.userData.tempoVida <= 0) { scene.remove(exp); explosoes.splice(i, 1); }
+                let exp = explosoes[i]; exp.children.forEach(f => { f.position.x += f.userData.velX; f.position.y += f.userData.velY; f.scale.multiplyScalar(0.85); });
+                exp.userData.tempoVida--; if (exp.userData.tempoVida <= 0) { scene.remove(exp); explosoes.splice(i, 1); }
             }
-            
-            if (teclas.ArrowUp) {
+            if (estadoTeclas.Avançar) {
                 const particula = new THREE.Mesh(geoRastoGlobal, matRastoGlobal);
                 particula.position.set(naveJogador.position.x + Math.sin(naveJogador.rotation.z)*2, naveJogador.position.y - Math.cos(naveJogador.rotation.z)*2, 0);
                 scene.add(particula); particulasRasto.push({ malha: particula, tempoVida: 1.0 });
             }
-
             for (let i = particulasRasto.length - 1; i >= 0; i--) {
-                let p = particulasRasto[i];
-                p.malha.position.y -= 0.2; p.malha.scale.multiplyScalar(0.85); p.tempoVida -= 0.05; 
+                let p = particulasRasto[i]; p.malha.position.y -= 0.2; p.malha.scale.multiplyScalar(0.85); p.tempoVida -= 0.05; 
                 if (p.tempoVida <= 0) { scene.remove(p.malha); particulasRasto.splice(i, 1); }
             }
 
@@ -770,12 +1134,6 @@
 
             const modo3D = (cameraAtiva === cameraPerspetiva);
             visualBlocos.visible = !modo3D; visual3D.visible = modo3D;
-            arrayInimigos.forEach(inim => {
-                if (inim.userData.visualBlocos && inim.userData.visual3D) {
-                    inim.userData.visualBlocos.visible = !modo3D;
-                    inim.userData.visual3D.visible = modo3D;
-                }
-            });
 
             if (escudoAtivo) {
                 malhaEscudo.rotation.x += 0.05; malhaEscudo.rotation.y += 0.05; malhaEscudo.rotation.z += 0.02;
@@ -785,35 +1143,28 @@
             }
             ultimaAtualizacaoEscudo = agora;
 
-            if (hudVisivel) {
-                document.getElementById('barra-escudo').style.width = Math.floor(cargaEscudo) + '%';
-                document.getElementById('barra-escudo').style.backgroundColor = cargaEscudo >= 100 ? '#00ffff' : '#ffaa00';
+            if (hudVisivel && agora - ultimoDrawHUD > 50) {
+                ultimoDrawHUD = agora; 
+                uiEscudo.style.width = Math.floor(cargaEscudo) + '%';
+                uiEscudo.style.backgroundColor = cargaEscudo >= 100 ? '#00ffff' : '#ffaa00';
                 
                 const progressoOnda = Math.min(100, ((agora - ultimoUsoOnda) / COOLDOWN_ONDA) * 100);
-                const barraOnda = document.getElementById('barra-onda');
-                barraOnda.style.width = progressoOnda + '%';
-                barraOnda.style.backgroundColor = progressoOnda >= 100 ? '#ff00ff' : '#550055';
-            }
+                uiOnda.style.width = progressoOnda + '%'; uiOnda.style.backgroundColor = progressoOnda >= 100 ? '#ff00ff' : '#550055';
 
+                const progressoDash = Math.min(100, ((agora - ultimoUsoDash) / COOLDOWN_DASH) * 100);
+                uiDash.style.width = progressoDash + '%'; uiDash.style.backgroundColor = progressoDash >= 100 ? '#ffff00' : '#555500';
+            }
             
             if (fundoEstrelas) {
                 const pos = fundoEstrelas.geometry.attributes.position.array;
-                const cY = naveJogador.position.y;
-                const cX = naveJogador.position.x;
-                
+                const cY = naveJogador.position.y; const cX = naveJogador.position.x;
                 for(let i = 0; i < pos.length; i += 3) { 
-                    pos[i+1] -= 0.5; 
-                    if (teclas.ArrowUp) pos[i+1] -= 1.0; 
-                    
-                    if (pos[i+1] < cY - 400) pos[i+1] += 800;
-                    else if (pos[i+1] > cY + 400) pos[i+1] -= 800;
-                    
-                    if (pos[i] < cX - 400) pos[i] += 800;
-                    else if (pos[i] > cX + 400) pos[i] -= 800;
+                    pos[i+1] -= 0.5; if (estadoTeclas.Avançar) pos[i+1] -= 1.0; 
+                    if (pos[i+1] < cY - 400) pos[i+1] += 800; else if (pos[i+1] > cY + 400) pos[i+1] -= 800;
+                    if (pos[i] < cX - 400) pos[i] += 800; else if (pos[i] > cX + 400) pos[i] -= 800;
                 }
                 fundoEstrelas.geometry.attributes.position.needsUpdate = true; 
             }
-            
             renderer.render(scene, cameraAtiva);
         }
     </script>
