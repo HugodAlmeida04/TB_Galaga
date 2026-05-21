@@ -423,6 +423,50 @@
 
         let modoInicialCam = '3D';
 
+        const audioManager = {
+            somAtivo: true,
+            volumeSFX: 0.1,
+
+            music: {
+                openingTheme: new Audio('Sounds/OpeningTheme.wav')
+            },
+
+            sfx: {
+                gameLoad: new Audio('Sounds/gameLoad.wav')
+            },
+
+            tocar(nome) {
+                if (!this.somAtivo || !this.sfx[nome]) return;
+
+                const som = this.sfx[nome].cloneNode();
+                som.volume = this.volumeSFX;
+                som.play().catch(() => {});
+            }
+        };
+
+        const musicaMenu = audioManager.music.openingTheme;
+        musicaMenu.volume = 0.15;
+        musicaMenu.loop = false;
+
+        function iniciarMusicaMenu() {
+            if (window.jogoIniciado) return;
+
+            musicaMenu.volume = 0.15;
+            musicaMenu.play().catch(() => {});
+        }
+
+        ['mousemove', 'click', 'keydown', 'touchstart'].forEach(evento => {
+            document.addEventListener(evento, iniciarMusicaMenu, { once: true });
+        });
+
+        musicaMenu.addEventListener('timeupdate', () => {
+            if (!window.jogoIniciado && musicaMenu.currentTime >= musicaMenu.duration - 2) {
+                musicaMenu.currentTime = 0;
+                musicaMenu.play().catch(() => {});
+            }
+        });
+                    
+
         init();
         animate();
 
@@ -515,6 +559,11 @@
                     window.botaoEmCaptura.classList.remove('escutando');
                     window.botaoEmCaptura = null;
                     aplicarTraducoes();
+                    aplicarTraducoes();
+
+                    window.addEventListener('click', () => {
+                        audioManager.music.openingTheme.play();
+                    }, { once: true });
                 }
             });
 
@@ -546,6 +595,9 @@
             });
 
             document.getElementById('btn-jogar').addEventListener('click', () => {
+                audioManager.music.openingTheme.pause(); // pausa música do menu inicial mal clica no botão jogar
+                audioManager.music.openingTheme.currentTime = 0; // --
+                audioManager.tocar('gameLoad');
                 document.getElementById('menu').style.display = 'none';
                 document.getElementById('hud').style.display = 'block';
                 
@@ -579,7 +631,12 @@
                 pontuacaoMaxima = pontos;
                 localStorage.setItem('galaga_highscore', pontuacaoMaxima);
             }
-            if (pontos >= proximoBonusVida) { vidas++; proximoBonusVida += 5000; }
+            
+            if (pontos >= proximoBonusVida) {
+                vidas++;
+                proximoBonusVida += 5000;
+                audioManager.tocar('extend');
+            }
 
             waveAtual = 1 + Math.floor(pontos / 2000);
 
