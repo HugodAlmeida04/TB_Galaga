@@ -425,14 +425,17 @@
 
         const audioManager = {
             somAtivo: true,
-            volumeSFX: 0.1,
+            volumeSFX: 0.5,
 
             music: {
                 openingTheme: new Audio('Sounds/OpeningTheme.wav')
             },
 
             sfx: {
-                gameLoad: new Audio('Sounds/gameLoad.wav')
+                gameLoad: new Audio('Sounds/gameLoad.wav'),
+                GunShot: new Audio ('Sounds/GunShot.wav'),
+                CapturedFighter: new Audio('Sounds/CapturedFighter.wav'),
+                
             },
 
             tocar(nome) {
@@ -445,13 +448,13 @@
         };
 
         const musicaMenu = audioManager.music.openingTheme;
-        musicaMenu.volume = 0.15;
+        musicaMenu.volume = 0.35;
         musicaMenu.loop = false;
 
         function iniciarMusicaMenu() {
             if (window.jogoIniciado) return;
 
-            musicaMenu.volume = 0.15;
+            musicaMenu.volume = 0.5;
             musicaMenu.play().catch(() => {});
         }
 
@@ -779,6 +782,7 @@
         }
 
         function executarDisparoJogador() {
+            audioManager.tocar('GunShot')
             if(window.jogoPausado || jogoAcabou) return;
             const angulo = naveJogador.rotation.z;
             const dirX = -Math.sin(angulo), dirY = Math.cos(angulo);
@@ -797,6 +801,7 @@
         }
 
         function dispararInimigo(posicaoInimigo, velocidad, forte) {
+
             const geo = forte ? geoLaserForte : geoLaserInimigo;
             const mat = forte ? matLaserTanque : matLaserCaca;
             const tiro = new THREE.Mesh(geo, mat); tiro.position.copy(posicaoInimigo);
@@ -855,6 +860,7 @@
             if (window.funcaoEmCaptura) return; 
             if (!window.jogoIniciado) return;
             if (jogoAcabou) { if (event.code === 'Enter') location.reload(); return; }
+
             
             if (event.code === 'Escape' || event.code === 'KeyP') { togglePausa(); return; }
             if (window.jogoPausado) return;
@@ -1120,6 +1126,7 @@
                             if (inimigo.userData.setaGui) { scene.remove(inimigo.userData.setaGui); inimigo.userData.setaGui.material.dispose(); }
                             inimigo.parent.remove(inimigo); arrayInimigos.splice(j, 1);
                            if (vidas <= 0) {
+                                audioManager.tocar('CapturedFighter');
                                 document.getElementById('vidas').innerText = "0"; document.getElementById('pontuacao-final').innerText = pontos;
                                 document.getElementById('ecra-gameover').style.display = 'flex'; jogoAcabou = true;
                             } else { invulneravel = true; tempoInvulneravel = Date.now(); }
@@ -1136,6 +1143,7 @@
                     if (!escudoAtivo) {
                         vidas--; atualizarHUD(); criarExplosao(naveJogador.position);
                         if (vidas <= 0) {
+                            audioManager.tocar('CapturedFighter');
                             document.getElementById('vidas').innerText = "0"; document.getElementById('pontuacao-final').innerText = pontos;
                             document.getElementById('ecra-gameover').style.display = 'flex'; jogoAcabou = true;
                         } else { invulneravel = true; tempoInvulneravel = agora; }
