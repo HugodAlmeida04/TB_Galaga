@@ -428,7 +428,8 @@
             volumeSFX: 0.5,
 
             music: {
-                openingTheme: new Audio('Sounds/OpeningTheme.wav')
+                openingTheme: new Audio('Sounds/OpeningTheme.wav'),
+                gameMusic: new Audio('Sounds/GameMusic.wav')
             },
 
             sfx: {
@@ -446,6 +447,9 @@
                 som.play().catch(() => {});
             }
         };
+
+        audioManager.music.gameMusic.loop = true;
+        audioManager.music.gameMusic.volume = 0.2;
 
         const musicaMenu = audioManager.music.openingTheme;
         musicaMenu.volume = 0.35;
@@ -598,12 +602,26 @@
             });
 
             document.getElementById('btn-jogar').addEventListener('click', () => {
-                audioManager.music.openingTheme.pause(); // pausa música do menu inicial mal clica no botão jogar
-                audioManager.music.openingTheme.currentTime = 0; // --
-                audioManager.tocar('gameLoad');
+
+                audioManager.music.openingTheme.pause();
+                audioManager.music.openingTheme.currentTime = 0;
+
+                const somStart = audioManager.sfx.gameLoad.cloneNode();
+
+                somStart.volume = audioManager.volumeSFX;
+
+                somStart.play();
+
+                somStart.onended = () => {
+
+                    audioManager.music.gameMusic.currentTime = 0;
+
+                    audioManager.music.gameMusic.play().catch(() => {});
+                };
+
                 document.getElementById('menu').style.display = 'none';
                 document.getElementById('hud').style.display = 'block';
-                
+
                 if (window.jogoPausado) {
                     window.jogoPausado = false;
                 } else {
@@ -1126,6 +1144,8 @@
                             if (inimigo.userData.setaGui) { scene.remove(inimigo.userData.setaGui); inimigo.userData.setaGui.material.dispose(); }
                             inimigo.parent.remove(inimigo); arrayInimigos.splice(j, 1);
                            if (vidas <= 0) {
+                                audioManager.music.gameMusic.pause();
+                                audioManager.music.gameMusic.currentTime = 0;
                                 audioManager.tocar('CapturedFighter');
                                 document.getElementById('vidas').innerText = "0"; document.getElementById('pontuacao-final').innerText = pontos;
                                 document.getElementById('ecra-gameover').style.display = 'flex'; jogoAcabou = true;
@@ -1143,6 +1163,8 @@
                     if (!escudoAtivo) {
                         vidas--; atualizarHUD(); criarExplosao(naveJogador.position);
                         if (vidas <= 0) {
+                            audioManager.music.gameMusic.pause();
+                            audioManager.music.gameMusic.currentTime = 0;
                             audioManager.tocar('CapturedFighter');
                             document.getElementById('vidas').innerText = "0"; document.getElementById('pontuacao-final').innerText = pontos;
                             document.getElementById('ecra-gameover').style.display = 'flex'; jogoAcabou = true;
