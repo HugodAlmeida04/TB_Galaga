@@ -420,8 +420,8 @@
 
         const audioManager = {
             somAtivo: true,
-            volumeSFX: 0.15,
-            volumeMusica: 0.15,
+            volumeSFX: 0.40,
+            volumeMusica: 0.40,
 
             music: {
                 openingTheme: new Audio('Sounds/OpeningTheme.wav'),
@@ -431,7 +431,8 @@
             sfx: {
                 gameLoad: new Audio('Sounds/gameLoad.wav'),
                 GunShot: new Audio('Sounds/GunShot.wav'),
-                CapturedFighter: new Audio('Sounds/CapturedFighter.wav')
+                CapturedFighter: new Audio('Sounds/CapturedFighter.wav'),
+                waveshock: new Audio('Sounds/waveshock.wav')
             },
 
             tocar(nome) {
@@ -885,6 +886,7 @@
 
         function despoletarOndaChoque() {
             if(window.jogoPausado || ondaChoqueAtiva || Date.now() - ultimoUsoOnda <= COOLDOWN_ONDA) return;
+            audioManager.tocar('waveshock');
             ondaChoqueAtiva = true; raioOnda = 1; malhaOnda.position.copy(naveJogador.position); 
             malhaOnda.visible = true; ultimoUsoOnda = Date.now();
         }
